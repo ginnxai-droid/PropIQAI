@@ -13,6 +13,7 @@ import {
   User,
 } from "lucide-react";
 import { Priority, LeadStatus, LeadSource } from "../types";
+import { summarizeSiteVisits } from "../lib/siteVisitMetrics";
 import {
   ResponsiveContainer,
   BarChart,
@@ -30,7 +31,7 @@ import {
 } from "recharts";
 
 export const DashboardView: React.FC = () => {
-  const { leads, siteVisits, projects, users, setActivePage, setSelectedLeadId } = useApp();
+  const { leads, siteVisits, slaEvents, projects, users, setActivePage, setSelectedLeadId } = useApp();
 
   // Dynamic calculations from context
   const totalLeads = leads.length;
@@ -38,24 +39,19 @@ export const DashboardView: React.FC = () => {
   const qualifiedLeads = leads.filter((l) => l.status === LeadStatus.QUALIFIED).length;
   const hotLeads = leads.filter((l) => l.priority === Priority.HOT).length;
   
-  // After hours leads (simulated flag or fallback time range)
   const afterHoursLeads = leads.filter((l) => l.isAfterHours).length;
   
   const missedCallsRecovered = leads.filter(
-    (l) => l.source === LeadSource.MISSED_CALL
+    (l) => l.source === LeadSource.MISSED_CALL && Boolean(l.first_response_at)
   ).length;
   
-  const siteVisitsBooked = siteVisits.filter(
-    (v) => v.status !== "CANCELLED"
-  ).length;
+  const { confirmedSiteVisits } = summarizeSiteVisits(siteVisits);
 
-  // Real-time SLA breaches calculations:
-  // Breach if hot/warm priority, not finalized, and deadline is in the past
-  const slaBreaches = leads.filter((l) => {
-    if (!l.sla_deadline) return false;
-    if (l.status === LeadStatus.BOOKED || l.status === LeadStatus.LOST) return false;
-    return new Date(l.sla_deadline).getTime() < Date.now();
-  }).length;
+  const slaBreaches = slaEvents.filter(
+    (event) =>
+      event.breached ||
+      (!event.completed_at && new Date(event.due_at).getTime() < Date.now()),
+  ).length;
 
   // 1. Chart Data: Lead Status distribution
   const statusData = [
@@ -68,25 +64,46 @@ export const DashboardView: React.FC = () => {
   ];
 
   // 2. Chart Data: Source Breakdown
-  const sourceBreakdown = [
-    { name: "Meta Ads", value: leads.filter((l) => l.source === LeadSource.META).length, color: "#2563eb" },
-    { name: "Missed Call", value: leads.filter((l) => l.source === LeadSource.MISSED_CALL).length, color: "#f59e0b" },
-    { name: "WhatsApp", value: leads.filter((l) => l.source === LeadSource.WHATSAPP).length, color: "#10b981" },
-    { name: "Website Chat", value: leads.filter((l) => l.source === LeadSource.WEBSITE).length, color: "#ec4899" },
-    { name: "Portals", value: leads.filter((l) => l.source === LeadSource.PORTAL).length, color: "#8b5cf6" },
-    { name: "Direct Phone", value: leads.filter((l) => l.source === LeadSource.PHONE).length, color: "#3b82f6" },
-  ].filter(s => s.value > 0);
+  const sourceColors: Record<LeadSource, string> = {
+    [LeadSource.PHONE]: "#3b82f6",
+    [LeadSource.MISSED_CALL]: "#f59e0b",
+    [LeadSource.WHATSAPP]: "#10b981",
+    [LeadSource.WEBSITE]: "#ec4899",
+    [LeadSource.META]: "#4f46e5",
+    [LeadSource.GOOGLE]: "#22c55e",
+    [LeadSource.EMAIL]: "#06b6d4",
+    [LeadSource.PORTAL]: "#8b5cf6",
+    [LeadSource.MANUAL]: "#71717a",
+  };
+  const sourceBreakdown = Object.values(LeadSource)
+    .map((source) => ({
+      name: source.replace(/_/g, " "),
+      value: leads.filter((lead) => lead.source === source).length,
+      color: sourceColors[source],
+    }))
+    .filter((source) => source.value > 0);
 
-  // 3. SLA Breach historical simulation
-  const slaTrendData = [
-    { date: "June 03", TotalLeads: 12, Breached: 4 },
-    { date: "June 04", TotalLeads: 15, Breached: 3 },
-    { date: "June 05", TotalLeads: 19, Breached: 5 },
-    { date: "June 06", TotalLeads: 22, Breached: 2 },
-    { date: "June 07", TotalLeads: 18, Breached: 3 },
-    { date: "June 08", TotalLeads: 24, Breached: 5 },
-    { date: "June 09", TotalLeads: totalLeads, Breached: slaBreaches },
-  ];
+  const slaTrendData = Array.from({ length: 7 }, (_, index) => {
+    const day = new Date();
+    day.setHours(0, 0, 0, 0);
+    day.setDate(day.getDate() - (6 - index));
+    const nextDay = new Date(day);
+    nextDay.setDate(nextDay.getDate() + 1);
+    const dailyEvents = slaEvents.filter((event) => {
+      const createdAt = new Date(event.created_at).getTime();
+      return createdAt >= day.getTime() && createdAt < nextDay.getTime();
+    });
+    return {
+      date: day.toLocaleDateString([], { month: "short", day: "numeric" }),
+      TotalEvents: dailyEvents.length,
+      Breached: dailyEvents.filter(
+        (event) =>
+          event.breached ||
+          (!event.completed_at &&
+            new Date(event.due_at).getTime() < Date.now()),
+      ).length,
+    };
+  });
 
   // Filter 5 of "Today's Hot Leads" for quick status dashboard table
   const hotLeadsList = leads
@@ -112,8 +129,8 @@ export const DashboardView: React.FC = () => {
             <Sparkles className="w-4 h-4 animate-spin-slow" />
           </div>
           <div>
-            <h4 className="text-sm font-bold text-zinc-100">Operational Focus: Revenue Recovery Wedge</h4>
-            <p className="text-xs text-zinc-400 mt-1">Simulate after-hours callbacks, missed calls, and automated qualification rules on Pune/Mumbai inventory.</p>
+            <h4 className="text-sm font-bold text-zinc-100">Operational Lead Overview</h4>
+            <p className="text-xs text-zinc-400 mt-1">Metrics below are calculated from persisted leads, assignments, visits, and response timestamps.</p>
           </div>
         </div>
         <div className="text-right hidden md:block">
@@ -134,7 +151,7 @@ export const DashboardView: React.FC = () => {
           <div className="mt-4 flex items-baseline justify-between">
             <span className="text-2xl font-bold tracking-tight text-white">{totalLeads}</span>
             <span className="text-[10px] font-bold text-emerald-400 bg-emerald-500/10 border border-emerald-500/20 px-1.5 py-0.5 rounded-md flex items-center">
-              +15% vs wk
+              Persisted
             </span>
           </div>
         </div>
@@ -156,7 +173,7 @@ export const DashboardView: React.FC = () => {
         {/* Metric 3 */}
         <div className="bg-[#121214] p-5 rounded-xl border border-zinc-800/80 hover:border-zinc-750 transition-all duration-200">
           <div className="flex items-center justify-between">
-            <span className="text-xs font-semibold text-zinc-400 uppercase tracking-wider">AI Qualified</span>
+            <span className="text-xs font-semibold text-zinc-400 uppercase tracking-wider">Qualified</span>
             <span className="p-1.5 bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 rounded-lg">
               <Sparkles className="w-4 h-4" />
             </span>
@@ -196,7 +213,7 @@ export const DashboardView: React.FC = () => {
           <div className="mt-4 flex items-baseline justify-between">
             <span className="text-2xl font-bold tracking-tight text-white">{afterHoursLeads}</span>
             <span className="text-[10px] text-purple-400 bg-purple-500/10 border border-purple-500/20 px-1.5 py-0.5 rounded-md font-semibold">
-              AI Handled
+              Captured
             </span>
           </div>
         </div>
@@ -204,7 +221,7 @@ export const DashboardView: React.FC = () => {
         {/* Metric 6 */}
         <div className="bg-[#121214] p-5 rounded-xl border border-zinc-800/80 hover:border-zinc-750 transition-all duration-200">
           <div className="flex items-center justify-between">
-            <span className="text-xs font-semibold text-zinc-400 uppercase tracking-wider">Voice Recoveries</span>
+            <span className="text-xs font-semibold text-zinc-400 uppercase tracking-wider">Missed Calls Responded</span>
             <span className="p-1.5 bg-amber-500/10 text-amber-400 border border-amber-500/20 rounded-lg">
               <PhoneCall className="w-4 h-4" />
             </span>
@@ -212,7 +229,7 @@ export const DashboardView: React.FC = () => {
           <div className="mt-4 flex items-baseline justify-between">
             <span className="text-2xl font-bold tracking-tight text-white">{missedCallsRecovered}</span>
             <span className="text-[10px] text-amber-400 bg-amber-500/10 border border-amber-500/20 px-1.5 py-0.5 rounded-md font-semibold">
-              Dialer Active
+              Responded
             </span>
           </div>
         </div>
@@ -220,15 +237,15 @@ export const DashboardView: React.FC = () => {
         {/* Metric 7 */}
         <div className="bg-[#121214] p-5 rounded-xl border border-zinc-800/80 hover:border-zinc-750 transition-all duration-200">
           <div className="flex items-center justify-between">
-            <span className="text-xs font-semibold text-zinc-400 uppercase tracking-wider">Visits Booked</span>
+            <span className="text-xs font-semibold text-zinc-400 uppercase tracking-wider">Confirmed Site Visits</span>
             <span className="p-1.5 bg-indigo-500/10 text-indigo-400 border border-indigo-500/20 rounded-lg">
               <CalendarCheck className="w-4 h-4" />
             </span>
           </div>
           <div className="mt-4 flex items-baseline justify-between">
-            <span className="text-2xl font-bold tracking-tight text-white">{siteVisitsBooked}</span>
+            <span className="text-2xl font-bold tracking-tight text-white">{confirmedSiteVisits}</span>
             <span className="text-[10px] text-indigo-400 bg-indigo-500/10 border border-indigo-500/20 px-1.5 py-0.5 rounded-md font-medium">
-              Saturday Spikes
+              Persisted
             </span>
           </div>
         </div>
@@ -244,7 +261,7 @@ export const DashboardView: React.FC = () => {
           <div className="mt-4 flex items-baseline justify-between">
             <span className="text-2xl font-black tracking-tight text-rose-400">{slaBreaches}</span>
             <span className="text-[9px] font-mono text-rose-350 bg-rose-500/10 border border-rose-500/20 px-1.5 py-0.5 rounded-md font-bold text-center">
-              ALERT MANAGER
+              Needs Review
             </span>
           </div>
         </div>
@@ -327,7 +344,7 @@ export const DashboardView: React.FC = () => {
         <div className="bg-[#121214] p-5 rounded-xl border border-zinc-800 shadow-xs">
           <div className="flex items-center justify-between mb-4 border-b border-zinc-800/80 pb-3">
             <h3 className="font-bold text-zinc-100 text-sm">Follow-up Speed & Breach SLA Trend</h3>
-            <span className="text-xs text-rose-450 font-mono font-bold animate-pulse">● Live Alerts</span>
+            <span className="text-xs text-rose-450 font-mono font-bold">Current Records</span>
           </div>
           <div className="h-64">
             <ResponsiveContainer width="100%" height="100%">

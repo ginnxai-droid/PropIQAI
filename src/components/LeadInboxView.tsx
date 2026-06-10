@@ -5,6 +5,7 @@ import {
   LeadStatus,
   Priority,
   BuyerType,
+  PurchaseTimeline,
   SiteVisitStatus,
 } from "../types";
 import {
@@ -33,7 +34,10 @@ export const LeadInboxView: React.FC = () => {
     updateLeadStatus,
     assignLead,
     scheduleSiteVisit,
+    addLead,
+    activeRole,
   } = useApp();
+  const canCreateLead = activeRole !== "EXECUTIVE";
 
   // Filter States
   const [search, setSearch] = useState("");
@@ -55,6 +59,11 @@ export const LeadInboxView: React.FC = () => {
   const [visitorsCount, setVisitorsCount] = useState(2);
   const [familyAttending, setFamilyAttending] = useState(true);
   const [buyerLocation, setBuyerLocation] = useState("");
+  const [showAddLead, setShowAddLead] = useState(false);
+  const [newLeadName, setNewLeadName] = useState("");
+  const [newLeadPhone, setNewLeadPhone] = useState("");
+  const [newLeadEmail, setNewLeadEmail] = useState("");
+  const [newLeadProjectId, setNewLeadProjectId] = useState("");
 
   const formatPriceRange = (min: number, max: number) => {
     const minLakhs = min / 100000;
@@ -130,22 +139,22 @@ export const LeadInboxView: React.FC = () => {
     }
   };
 
-  const handleQuickAssign = (leadId: string, assigneeId: string) => {
-    assignLead(leadId, assigneeId);
+  const handleQuickAssign = async (leadId: string, assigneeId: string) => {
+    await assignLead(leadId, assigneeId);
     setActiveAssignLeadId(null);
   };
 
-  const handleScheduleVisitSubmit = (e: React.FormEvent) => {
+  const handleScheduleVisitSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!activeVisitLeadId) return;
 
     const lead = leads.find((l) => l.id === activeVisitLeadId);
     if (!lead) return;
 
-    scheduleSiteVisit({
+    await scheduleSiteVisit({
       lead_id: activeVisitLeadId,
       project_id: lead.project_id,
-      preferred_date: preferredDate || new Date(Date.now() + 86400000 * 3).toISOString().split("T")[0],
+      preferred_date: preferredDate || new Date(Date.now() + 86400000 * 3).toISOString().split("T")[0]!,
       preferred_time: preferredTime || "11:00",
       visitors_count: Number(visitorsCount),
       family_attending: familyAttending,
@@ -162,6 +171,42 @@ export const LeadInboxView: React.FC = () => {
     setVisitorsCount(2);
     setFamilyAttending(true);
     setBuyerLocation("");
+  };
+
+  const handleCreateLead = async (event: React.FormEvent) => {
+    event.preventDefault();
+    const projectId = newLeadProjectId || projects[0]?.id;
+    if (!projectId) {
+      return;
+    }
+    const leadId = await addLead({
+      name: newLeadName,
+      phone: newLeadPhone,
+      email: newLeadEmail,
+      source: LeadSource.MANUAL,
+      project_id: projectId,
+      status: LeadStatus.NEW,
+      buyer_type: BuyerType.UNKNOWN,
+      apartment_preference: "",
+      budget_min: 0,
+      budget_max: 0,
+      purchase_timeline: PurchaseTimeline.UNKNOWN,
+      site_visit_interest: false,
+      score: 5,
+      assigned_to: undefined,
+      ai_summary: "",
+      recommended_next_action: "",
+      key_questions: [],
+      objections: [],
+      isAfterHours: false,
+    });
+    setNewLeadName("");
+    setNewLeadPhone("");
+    setNewLeadEmail("");
+    setNewLeadProjectId("");
+    setShowAddLead(false);
+    setSelectedLeadId(leadId);
+    setActivePage("detail");
   };
 
   return (
@@ -216,8 +261,84 @@ export const LeadInboxView: React.FC = () => {
             <RefreshCw className="w-3.5 h-3.5" />
             <span>Reset Filters</span>
           </button>
+          {canCreateLead && (
+            <button
+              type="button"
+              onClick={() => setShowAddLead((visible) => !visible)}
+              className="flex items-center gap-1 rounded-lg bg-indigo-600 px-3 py-2 text-xs font-bold text-white"
+            >
+              <Plus className="h-3.5 w-3.5" />
+              Add Lead
+            </button>
+          )}
         </div>
       </div>
+
+      {showAddLead && (
+        <form
+          onSubmit={handleCreateLead}
+          className="grid grid-cols-1 gap-3 rounded-xl border border-zinc-800 bg-[#121214] p-4 text-xs md:grid-cols-5"
+        >
+          <label className="text-zinc-400">
+            Buyer name
+            <input
+              value={newLeadName}
+              onChange={(event) => setNewLeadName(event.target.value)}
+              className="mt-1 w-full rounded-lg border border-zinc-800 bg-zinc-900 p-2 text-zinc-100"
+              required
+            />
+          </label>
+          <label className="text-zinc-400">
+            Phone
+            <input
+              value={newLeadPhone}
+              onChange={(event) => setNewLeadPhone(event.target.value)}
+              className="mt-1 w-full rounded-lg border border-zinc-800 bg-zinc-900 p-2 text-zinc-100"
+              required
+            />
+          </label>
+          <label className="text-zinc-400">
+            Email
+            <input
+              type="email"
+              value={newLeadEmail}
+              onChange={(event) => setNewLeadEmail(event.target.value)}
+              className="mt-1 w-full rounded-lg border border-zinc-800 bg-zinc-900 p-2 text-zinc-100"
+            />
+          </label>
+          <label className="text-zinc-400">
+            Project
+            <select
+              value={newLeadProjectId}
+              onChange={(event) => setNewLeadProjectId(event.target.value)}
+              className="mt-1 w-full rounded-lg border border-zinc-800 bg-zinc-900 p-2 text-zinc-100"
+              required
+            >
+              <option value="">Select project</option>
+              {projects.map((project) => (
+                <option key={project.id} value={project.id}>
+                  {project.name}
+                </option>
+              ))}
+            </select>
+          </label>
+          <div className="flex items-end gap-2">
+            <button
+              type="submit"
+              className="rounded-lg bg-indigo-600 px-3 py-2 font-bold text-white"
+            >
+              Create Lead
+            </button>
+            <button
+              type="button"
+              onClick={() => setShowAddLead(false)}
+              className="px-2 py-2 text-zinc-400"
+            >
+              Cancel
+            </button>
+          </div>
+        </form>
+      )}
 
       {/* Grid Filter Panel */}
       <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3 bg-[#121214] p-4 rounded-xl border border-zinc-800 text-xs">
@@ -347,7 +468,7 @@ export const LeadInboxView: React.FC = () => {
                   <td colSpan={11} className="py-12 text-center text-zinc-500">
                     <UserCheck className="w-12 h-12 mx-auto text-zinc-700 stroke-1 mb-2" />
                     <p className="font-bold text-zinc-405">No Leads Found matching those active filters.</p>
-                    <p className="text-xs mt-1 text-zinc-600">Try resetting the filters or trigger simulated lead ingestion above!</p>
+                    <p className="text-xs mt-1 text-zinc-600">Try resetting the filters or add a lead through an authenticated intake flow.</p>
                   </td>
                 </tr>
               ) : (
@@ -476,7 +597,7 @@ export const LeadInboxView: React.FC = () => {
                               // Set default date range for visit scheduler
                               const someDate = new Date();
                               someDate.setDate(someDate.getDate() + 3);
-                              setPreferredDate(someDate.toISOString().split("T")[0]);
+                              setPreferredDate(someDate.toISOString().split("T")[0]!);
                               setPreferredTime("11:00");
                             }}
                             className="p-1 px-1.5 bg-zinc-800 hover:bg-emerald-600/10 hover:text-emerald-400 hover:border-emerald-500/20 border border-zinc-705 text-zinc-300 rounded-md transition-colors font-bold text-[10px] cursor-pointer flex items-center gap-1"
@@ -524,7 +645,7 @@ export const LeadInboxView: React.FC = () => {
                   return (
                     <button
                       key={usr.id}
-                      onClick={() => handleQuickAssign(activeAssignLeadId, usr.id)}
+                      onClick={() => void handleQuickAssign(activeAssignLeadId, usr.id)}
                       className={`w-full text-left p-3 rounded-lg border text-xs transition-all flex items-center justify-between ${
                         isAssigned
                           ? "bg-indigo-950/20 border-indigo-500 ring-1 ring-indigo-500"

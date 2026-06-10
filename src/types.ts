@@ -136,6 +136,7 @@ export interface Lead {
   priority: Priority;
   assigned_to?: string; // User ID
   sla_deadline?: string; // ISO date string
+  first_response_at?: string;
   last_contacted_at?: string;
   next_followup_at?: string;
   ai_summary?: string;

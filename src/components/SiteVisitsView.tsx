@@ -12,7 +12,7 @@ import {
 } from "lucide-react";
 
 export const SiteVisitsView: React.FC = () => {
-  const { siteVisits, leads, projects, users, updateSiteVisitStatus } = useApp();
+  const { siteVisits, leads, projects, users, updateSiteVisitStatus, updateSiteVisitOutcome } = useApp();
 
   const [filterVisitStatus, setFilterVisitStatus] = useState<string>("ALL");
   const [outcomeNotes, setOutcomeNotes] = useState<{ [key: string]: string }>({});
@@ -29,16 +29,13 @@ export const SiteVisitsView: React.FC = () => {
     }
   };
 
-  const handleUpdateStatus = (visitId: string, status: SiteVisitStatus) => {
-    updateSiteVisitStatus(visitId, status);
+  const handleUpdateStatus = async (visitId: string, status: SiteVisitStatus) => {
+    await updateSiteVisitStatus(visitId, status);
   };
 
-  const handleSaveNotes = (visitId: string) => {
+  const handleSaveNotes = async (visitId: string) => {
     const rawNotes = outcomeNotes[visitId] || "";
-    const visitObj = siteVisits.find(v => v.id === visitId);
-    if (visitObj) {
-      visitObj.outcome = rawNotes;
-    }
+    await updateSiteVisitOutcome(visitId, rawNotes);
     setActiveNoteEditId(null);
   };
 
@@ -171,7 +168,7 @@ export const SiteVisitsView: React.FC = () => {
                         />
                         <div className="flex flex-col gap-1.5 shrink-0 justify-end">
                           <button
-                            onClick={() => handleSaveNotes(visit.id)}
+                            onClick={() => void handleSaveNotes(visit.id)}
                             className="bg-emerald-600 text-white rounded px-2.5 py-1 text-xs font-bold hover:bg-emerald-700 cursor-pointer"
                           >
                             Save
@@ -222,14 +219,14 @@ export const SiteVisitsView: React.FC = () => {
                     <span className="text-[9px] text-zinc-550 uppercase tracking-wider block font-semibold font-mono">Change Status Line</span>
                     <div className="flex gap-1.5 text-[10px]">
                       <button
-                        onClick={() => handleUpdateStatus(visit.id, SiteVisitStatus.COMPLETED)}
+                        onClick={() => void handleUpdateStatus(visit.id, SiteVisitStatus.COMPLETED)}
                         className="flex-1 bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 hover:bg-emerald-600/30 text-[10px] font-bold p-2 rounded-lg transition-all cursor-pointer flex items-center justify-center gap-1"
                       >
                         <CheckCircle className="w-3.5 h-3.5 shrink-0" />
                         <span>Completed</span>
                       </button>
                       <button
-                        onClick={() => handleUpdateStatus(visit.id, SiteVisitStatus.MISSED)}
+                        onClick={() => void handleUpdateStatus(visit.id, SiteVisitStatus.MISSED)}
                         className="flex-1 bg-rose-500/10 text-rose-455 border border-rose-500/20 hover:bg-rose-600/30 text-[10px] font-bold p-2 rounded-lg transition-all cursor-pointer flex items-center justify-center gap-1"
                       >
                         <XCircle className="w-3.5 h-3.5 shrink-0" />
@@ -237,7 +234,7 @@ export const SiteVisitsView: React.FC = () => {
                       </button>
                     </div>
                     <button
-                      onClick={() => handleUpdateStatus(visit.id, SiteVisitStatus.CANCELLED)}
+                      onClick={() => void handleUpdateStatus(visit.id, SiteVisitStatus.CANCELLED)}
                       className="w-full bg-zinc-800 hover:bg-zinc-700 text-zinc-400 text-[9px] font-bold py-1.5 rounded transition-colors cursor-pointer border border-zinc-750"
                     >
                       ✗ Cancel Schedule Group

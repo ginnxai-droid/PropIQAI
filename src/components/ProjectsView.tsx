@@ -8,10 +8,12 @@ import {
   Compass,
   PlusSquare,
   HelpCircle,
+  Pencil,
 } from "lucide-react";
 
 export const ProjectsView: React.FC = () => {
-  const { projects, addProject } = useApp();
+  const { projects, addProject, updateProject, activeRole } = useApp();
+  const canManageProjects = activeRole === "OWNER" || activeRole === "ADMIN";
   const [showAddProject, setShowAddProject] = useState(false);
 
   // Form Fields State
@@ -22,12 +24,16 @@ export const ProjectsView: React.FC = () => {
   const [maxPrice, setMaxPrice] = useState("");
   const [possession, setPossession] = useState("");
   const [desc, setDesc] = useState("");
+  const [editingProjectId, setEditingProjectId] = useState<string | null>(null);
+  const [editName, setEditName] = useState("");
+  const [editLocation, setEditLocation] = useState("");
+  const [editDescription, setEditDescription] = useState("");
 
   const formatPrice = (val: number) => {
     return `${(val / 100000).toFixed(0)} Lakhs`;
   };
 
-  const handleCreateProject = (e: React.FormEvent) => {
+  const handleCreateProject = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!name || !location || !rera) return;
 
@@ -41,17 +47,17 @@ export const ProjectsView: React.FC = () => {
       price_max: Number(maxPrice) || 10000000,
       possession_date: possession || "2028-12-31",
       description: desc || "Modern gated architecture.",
-      brochure_url: "https://example.com/brochure.pdf",
-      location_pin_url: "https://maps.google.com",
-      floor_plan_url: "https://example.com/floorplans.pdf",
+      brochure_url: "",
+      location_pin_url: "",
+      floor_plan_url: "",
       active: true,
-      amenities: ["Gated security", "Electric Power Backup", "Multi-Clubhouse"],
-      faqs: [{ question: "Parking details?", answer: "Reserved basement car park space is allocated with every premium apartment." }],
+      amenities: [],
+      faqs: [],
       created_at: new Date().toISOString(),
       updated_at: new Date().toISOString(),
     };
 
-    addProject(newProj);
+    await addProject(newProj);
     
     // Reset
     setShowAddProject(false);
@@ -62,6 +68,26 @@ export const ProjectsView: React.FC = () => {
     setMaxPrice("");
     setPossession("");
     setDesc("");
+  };
+
+  const startEditing = (project: Project) => {
+    setEditingProjectId(project.id);
+    setEditName(project.name);
+    setEditLocation(project.location);
+    setEditDescription(project.description);
+  };
+
+  const handleUpdateProject = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!editingProjectId || !editName.trim() || !editLocation.trim()) {
+      return;
+    }
+    await updateProject(editingProjectId, {
+      name: editName,
+      location: editLocation,
+      description: editDescription,
+    });
+    setEditingProjectId(null);
   };
 
   return (
@@ -75,17 +101,17 @@ export const ProjectsView: React.FC = () => {
             RERA Approved Project Inventories
           </h3>
           <p className="text-xs text-zinc-400 mt-1">
-            Configure dynamic context data (amenities, FAQs, floor-plans, brochures, locations) for automated AI buyer qualification.
+            Maintain tenant-scoped project facts, pricing, RERA identifiers, and sales reference material.
           </p>
         </div>
 
-        <button
+        {canManageProjects && <button
           onClick={() => setShowAddProject(!showAddProject)}
           className="bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-bold px-3 py-2 rounded-lg transition-colors flex items-center justify-center gap-1 cursor-pointer"
         >
           <PlusSquare className="w-4 h-4" />
           <span>Add New Project</span>
-        </button>
+        </button>}
       </div>
 
       {/* Project form */}
@@ -212,12 +238,70 @@ export const ProjectsView: React.FC = () => {
                 <span className="text-indigo-400 font-bold font-mono text-xs block mt-1">
                   {formatPrice(proj.price_min)} - {formatPrice(proj.price_max)}
                 </span>
+                {canManageProjects && (
+                  <button
+                    type="button"
+                    onClick={() => startEditing(proj)}
+                    className="mt-2 inline-flex items-center gap-1 text-[10px] font-bold text-indigo-400"
+                    aria-label={`Edit ${proj.name}`}
+                  >
+                    <Pencil className="h-3 w-3" />
+                    Edit
+                  </button>
+                )}
               </div>
             </div>
 
             {/* Description */}
             <div className="p-5 text-xs text-zinc-300 space-y-4">
-              <p className="leading-relaxed font-semibold text-zinc-400">"{proj.description}"</p>
+              {editingProjectId === proj.id ? (
+                <form onSubmit={handleUpdateProject} className="space-y-2">
+                  <label className="block text-zinc-400">
+                    Project name
+                    <input
+                      value={editName}
+                      onChange={(event) => setEditName(event.target.value)}
+                      className="mt-1 w-full rounded-lg border border-zinc-800 bg-zinc-900 p-2 text-zinc-100"
+                      required
+                    />
+                  </label>
+                  <label className="block text-zinc-400">
+                    Location
+                    <input
+                      value={editLocation}
+                      onChange={(event) => setEditLocation(event.target.value)}
+                      className="mt-1 w-full rounded-lg border border-zinc-800 bg-zinc-900 p-2 text-zinc-100"
+                      required
+                    />
+                  </label>
+                  <label className="block text-zinc-400">
+                    Description
+                    <textarea
+                      value={editDescription}
+                      onChange={(event) => setEditDescription(event.target.value)}
+                      className="mt-1 w-full rounded-lg border border-zinc-800 bg-zinc-900 p-2 text-zinc-100"
+                      rows={3}
+                    />
+                  </label>
+                  <div className="flex justify-end gap-2">
+                    <button
+                      type="button"
+                      onClick={() => setEditingProjectId(null)}
+                      className="px-3 py-1.5 text-zinc-400"
+                    >
+                      Cancel
+                    </button>
+                    <button
+                      type="submit"
+                      className="rounded-lg bg-indigo-600 px-3 py-1.5 font-bold text-white"
+                    >
+                      Save Changes
+                    </button>
+                  </div>
+                </form>
+              ) : (
+                <p className="leading-relaxed font-semibold text-zinc-400">"{proj.description}"</p>
+              )}
 
               {/* Amenities tags */}
               <div className="space-y-1">
@@ -239,8 +323,8 @@ export const ProjectsView: React.FC = () => {
                     AI FAQ Context Rules (`faqs`):
                   </span>
                   <div>
-                    <span className="block font-bold text-zinc-250">Q: {proj.faqs[0].question}</span>
-                    <span className="block font-medium text-zinc-500 mt-0.5">A: {proj.faqs[0].answer}</span>
+                    <span className="block font-bold text-zinc-250">Q: {proj.faqs[0]?.question}</span>
+                    <span className="block font-medium text-zinc-500 mt-0.5">A: {proj.faqs[0]?.answer}</span>
                   </div>
                 </div>
               )}

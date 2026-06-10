@@ -16,7 +16,13 @@ import {
   UserCheck,
   Tag,
 } from "lucide-react";
-import { LeadStatus, Priority } from "../types";
+import {
+  BuyerType,
+  HandoffReason,
+  LeadStatus,
+  Priority,
+  PurchaseTimeline,
+} from "../types";
 
 export const LeadDetailView: React.FC = () => {
   const {
@@ -25,10 +31,14 @@ export const LeadDetailView: React.FC = () => {
     projects,
     users,
     conversations,
+    handoffs,
     siteVisits,
     tasks,
     addConversationMessage,
     updateLeadStatus,
+    updateLead,
+    createHandoff,
+    activeRole,
     setActivePage,
   } = useApp();
 
@@ -58,6 +68,12 @@ export const LeadDetailView: React.FC = () => {
   const assignee = users.find((u) => u.id === lead.assigned_to);
   const conversation = conversations.find((c) => c.lead_id === lead.id);
   const activeVisits = siteVisits.filter((v) => v.lead_id === lead.id);
+  const activeHandoff = handoffs.find(
+    (handoff) =>
+      handoff.lead_id === lead.id &&
+      ["PENDING", "CONTACTED", "ESCALATED"].includes(handoff.status),
+  );
+  const canCreateHandoff = activeRole !== "EXECUTIVE";
 
   const formatCurrency = (val: number) => {
     if (val >= 10000000) {
@@ -68,18 +84,57 @@ export const LeadDetailView: React.FC = () => {
 
   const isSlaBreached = lead.sla_deadline && new Date(lead.sla_deadline).getTime() < Date.now();
 
-  const handleSendMessage = (e: React.FormEvent) => {
+  const handleSendMessage = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!manualText.trim()) return;
 
     // Send message to visual transcript
-    addConversationMessage(lead.id, "human", manualText);
+    await addConversationMessage(lead.id, "human", manualText);
     setManualText("");
 
     // Automatically transition to CONTACTED if logging manual action
     if (lead.status === LeadStatus.NEW) {
-      updateLeadStatus(lead.id, LeadStatus.CONTACTED);
+      await updateLeadStatus(lead.id, LeadStatus.CONTACTED);
     }
+  };
+
+  const handleQualificationUpdate = async (event: React.FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    const values = new FormData(event.currentTarget);
+    const score = Number(values.get("score"));
+    await updateLead(lead.id, {
+      buyer_type: values.get("buyer_type") as BuyerType,
+      apartment_preference: String(values.get("apartment_preference") ?? ""),
+      budget_min: Number(values.get("budget_min")),
+      budget_max: Number(values.get("budget_max")),
+      purchase_timeline: values.get("purchase_timeline") as PurchaseTimeline,
+      site_visit_interest: values.get("site_visit_interest") === "on",
+      score,
+      priority:
+        score >= 8
+          ? Priority.HOT
+          : score >= 6
+            ? Priority.WARM
+            : score >= 4
+              ? Priority.NURTURE
+              : Priority.COLD,
+      recommended_next_action: String(
+        values.get("recommended_next_action") ?? "",
+      ),
+    });
+  };
+
+  const handleHandoffCreate = async (event: React.FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    const values = new FormData(event.currentTarget);
+    const deadline = String(values.get("sla_deadline"));
+    await createHandoff({
+      lead_id: lead.id,
+      assigned_to: String(values.get("assigned_to")),
+      reason: values.get("reason") as HandoffReason,
+      priority: lead.priority,
+      sla_deadline: new Date(deadline).toISOString(),
+    });
   };
 
   return (
@@ -93,7 +148,7 @@ export const LeadDetailView: React.FC = () => {
           
           <div className="flex items-center space-x-4 mb-4">
             <div className="w-12 h-12 rounded-full bg-indigo-600 text-white font-bold text-center flex items-center justify-center shadow-lg shadow-indigo-505/10">
-              <span className="text-lg">{lead.name.split(" ")[0][0]}</span>
+              <span className="text-lg">{lead.name.trim().charAt(0) || "?"}</span>
             </div>
             <div>
               <h3 className="font-extrabold text-zinc-150 text-base flex items-center gap-1.5">
@@ -181,6 +236,105 @@ export const LeadDetailView: React.FC = () => {
           </div>
         </div>
 
+        <form
+          key={`qualification-${lead.id}`}
+          onSubmit={handleQualificationUpdate}
+          className="space-y-3 rounded-xl border border-zinc-800 bg-[#121214] p-5 text-xs"
+        >
+          <h4 className="font-bold uppercase tracking-wider text-zinc-300">
+            Qualification Details
+          </h4>
+          <label className="block text-zinc-400">
+            Buyer type
+            <select
+              name="buyer_type"
+              defaultValue={lead.buyer_type}
+              className="mt-1 w-full rounded-lg border border-zinc-800 bg-zinc-900 p-2 text-zinc-100"
+            >
+              {Object.values(BuyerType).map((type) => (
+                <option key={type} value={type}>{type}</option>
+              ))}
+            </select>
+          </label>
+          <label className="block text-zinc-400">
+            Apartment preference
+            <input
+              name="apartment_preference"
+              defaultValue={lead.apartment_preference}
+              className="mt-1 w-full rounded-lg border border-zinc-800 bg-zinc-900 p-2 text-zinc-100"
+            />
+          </label>
+          <div className="grid grid-cols-2 gap-2">
+            <label className="text-zinc-400">
+              Budget minimum
+              <input
+                name="budget_min"
+                type="number"
+                min="0"
+                defaultValue={lead.budget_min}
+                className="mt-1 w-full rounded-lg border border-zinc-800 bg-zinc-900 p-2 text-zinc-100"
+              />
+            </label>
+            <label className="text-zinc-400">
+              Budget maximum
+              <input
+                name="budget_max"
+                type="number"
+                min="0"
+                defaultValue={lead.budget_max}
+                className="mt-1 w-full rounded-lg border border-zinc-800 bg-zinc-900 p-2 text-zinc-100"
+              />
+            </label>
+          </div>
+          <label className="block text-zinc-400">
+            Purchase timeline
+            <select
+              name="purchase_timeline"
+              defaultValue={lead.purchase_timeline}
+              className="mt-1 w-full rounded-lg border border-zinc-800 bg-zinc-900 p-2 text-zinc-100"
+            >
+              {Object.values(PurchaseTimeline).map((timeline) => (
+                <option key={timeline} value={timeline}>{timeline}</option>
+              ))}
+            </select>
+          </label>
+          <label className="block text-zinc-400">
+            Qualification score
+            <input
+              name="score"
+              type="number"
+              min="1"
+              max="10"
+              step="0.1"
+              defaultValue={lead.score}
+              className="mt-1 w-full rounded-lg border border-zinc-800 bg-zinc-900 p-2 text-zinc-100"
+            />
+          </label>
+          <label className="flex items-center gap-2 text-zinc-400">
+            <input
+              name="site_visit_interest"
+              type="checkbox"
+              defaultChecked={lead.site_visit_interest}
+            />
+            Interested in a site visit
+          </label>
+          <label className="block text-zinc-400">
+            Recommended next action
+            <textarea
+              name="recommended_next_action"
+              defaultValue={lead.recommended_next_action}
+              className="mt-1 w-full rounded-lg border border-zinc-800 bg-zinc-900 p-2 text-zinc-100"
+              rows={2}
+            />
+          </label>
+          <button
+            type="submit"
+            className="w-full rounded-lg bg-indigo-600 px-3 py-2 font-bold text-white"
+          >
+            Save Qualification
+          </button>
+        </form>
+
         {/* Action Controls for Status */}
         <div className="bg-[#121214] rounded-xl border border-zinc-800 shadow-sm p-5 space-y-3">
           <h4 className="text-xs font-bold text-zinc-400 uppercase tracking-wider font-mono mb-2">Executive Lead Status Action</h4>
@@ -188,7 +342,7 @@ export const LeadDetailView: React.FC = () => {
           <div className="grid grid-cols-2 gap-2 text-xs">
             {/* Status updates */}
             <button
-              onClick={() => updateLeadStatus(lead.id, LeadStatus.QUALIFIED)}
+              onClick={() => void updateLeadStatus(lead.id, LeadStatus.QUALIFIED)}
               className={`p-2 border rounded-lg font-bold transition-all cursor-pointer ${
                 lead.status === LeadStatus.QUALIFIED
                   ? "bg-emerald-500/15 border-emerald-500/50 text-emerald-400"
@@ -198,7 +352,7 @@ export const LeadDetailView: React.FC = () => {
               Mark Qualified
             </button>
             <button
-              onClick={() => updateLeadStatus(lead.id, LeadStatus.CONTACTED)}
+              onClick={() => void updateLeadStatus(lead.id, LeadStatus.CONTACTED)}
               className={`p-2 border rounded-lg font-bold transition-all cursor-pointer ${
                 lead.status === LeadStatus.CONTACTED
                   ? "bg-indigo-500/15 border-indigo-505/50 text-indigo-400"
@@ -211,13 +365,13 @@ export const LeadDetailView: React.FC = () => {
 
           <div className="grid grid-cols-2 gap-2 text-xs">
             <button
-              onClick={() => updateLeadStatus(lead.id, LeadStatus.BOOKED)}
+              onClick={() => void updateLeadStatus(lead.id, LeadStatus.BOOKED)}
               className="p-2 border border-emerald-500/30 hover:bg-emerald-600/20 hover:text-emerald-400 rounded-lg font-bold transition-all cursor-pointer bg-emerald-500/10 text-emerald-500"
             >
               ★ Mark Booked
             </button>
             <button
-              onClick={() => updateLeadStatus(lead.id, LeadStatus.LOST)}
+              onClick={() => void updateLeadStatus(lead.id, LeadStatus.LOST)}
               className="p-2 border border-rose-500/30 hover:bg-rose-600/20 hover:text-rose-450 rounded-lg font-bold transition-all cursor-pointer bg-rose-500/10 text-rose-500"
             >
               ✗ Move to Lost
@@ -410,6 +564,59 @@ export const LeadDetailView: React.FC = () => {
               )}
             </div>
           </div>
+          {canCreateHandoff && (
+            <form
+              onSubmit={handleHandoffCreate}
+              className="grid grid-cols-1 gap-3 border-t border-zinc-800 pt-4 text-xs md:grid-cols-4"
+            >
+              <label className="text-zinc-400">
+                Handoff assignee
+                <select
+                  name="assigned_to"
+                  defaultValue={activeHandoff?.assigned_to ?? lead.assigned_to ?? ""}
+                  className="mt-1 w-full rounded-lg border border-zinc-800 bg-zinc-900 p-2 text-zinc-100"
+                  required
+                >
+                  <option value="">Select representative</option>
+                  {users.filter((user) => user.active).map((user) => (
+                    <option key={user.id} value={user.id}>{user.name}</option>
+                  ))}
+                </select>
+              </label>
+              <label className="text-zinc-400">
+                Reason
+                <select
+                  name="reason"
+                  defaultValue={activeHandoff?.reason ?? HandoffReason.HOT_LEAD}
+                  className="mt-1 w-full rounded-lg border border-zinc-800 bg-zinc-900 p-2 text-zinc-100"
+                >
+                  {Object.values(HandoffReason).map((reason) => (
+                    <option key={reason} value={reason}>{reason}</option>
+                  ))}
+                </select>
+              </label>
+              <label className="text-zinc-400">
+                SLA deadline
+                <input
+                  name="sla_deadline"
+                  type="datetime-local"
+                  defaultValue={new Date(Date.now() + 60 * 60 * 1000)
+                    .toISOString()
+                    .slice(0, 16)}
+                  className="mt-1 w-full rounded-lg border border-zinc-800 bg-zinc-900 p-2 text-zinc-100"
+                  required
+                />
+              </label>
+              <div className="flex items-end">
+                <button
+                  type="submit"
+                  className="w-full rounded-lg bg-indigo-600 px-3 py-2 font-bold text-white"
+                >
+                  {activeHandoff ? "Update Handoff" : "Create Handoff"}
+                </button>
+              </div>
+            </form>
+          )}
         </div>
 
       </div>

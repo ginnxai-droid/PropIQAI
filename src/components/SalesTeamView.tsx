@@ -7,7 +7,8 @@ import {
 } from "lucide-react";
 
 export const SalesTeamView: React.FC = () => {
-  const { users, leads, projects, addUser } = useApp();
+  const { users, leads, projects, addUser, activeRole } = useApp();
+  const canManageUsers = activeRole === Role.OWNER || activeRole === Role.ADMIN;
   const [showAddUser, setShowAddUser] = useState(false);
 
   // Form states
@@ -21,7 +22,7 @@ export const SalesTeamView: React.FC = () => {
     return leads.filter((l) => l.assigned_to === userId && l.status !== "BOOKED" && l.status !== "LOST").length;
   };
 
-  const handleCreateUser = (e: React.FormEvent) => {
+  const handleCreateUser = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!name || !email) return;
 
@@ -32,13 +33,13 @@ export const SalesTeamView: React.FC = () => {
       phone: phone || "+91 99999 88888",
       role,
       active: true,
-      project_assignments: ["proj_1", "proj_2"],
+      project_assignments: projects.slice(0, 2).map((project) => project.id),
       max_hot_leads_per_day: Number(maxLeads) || 12,
       created_at: new Date().toISOString(),
       updated_at: new Date().toISOString(),
     };
 
-    addUser(newUser);
+    await addUser(newUser);
     
     // Reset Form
     setShowAddUser(false);
@@ -64,13 +65,13 @@ export const SalesTeamView: React.FC = () => {
           </p>
         </div>
 
-        <button
+        {canManageUsers && <button
           onClick={() => setShowAddUser(!showAddUser)}
           className="bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-bold px-3 py-2 rounded-lg transition-colors flex items-center justify-center gap-1 cursor-pointer font-sans"
         >
           <Plus className="w-4 h-4" />
           <span>Register Advisor</span>
-        </button>
+        </button>}
       </div>
 
       {/* User addition drawer */}

@@ -8,9 +8,22 @@ import {
   CheckCircle2,
   PhoneCall,
 } from "lucide-react";
+import { Role } from "../types";
 
 export const SalesTasksView: React.FC = () => {
-  const { tasks, leads, users, toggleTaskStatus, addTask, projects } = useApp();
+  const {
+    tasks,
+    leads,
+    users,
+    toggleTaskStatus,
+    addTask,
+    projects,
+    activeRole,
+  } = useApp();
+  const canCreateTask =
+    activeRole === Role.OWNER ||
+    activeRole === Role.MANAGER ||
+    activeRole === Role.ADMIN;
   const [activeTab, setActiveTab] = useState<"ALL" | "PENDING" | "OVERDUE" | "COMPLETED">("ALL");
 
   // New task form fields state
@@ -30,13 +43,13 @@ export const SalesTasksView: React.FC = () => {
     }
   };
 
-  const handleCreateTask = (e: React.FormEvent) => {
+  const handleCreateTask = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!newTaskLeadId || !newTaskDue) return;
+    if (!newTaskLeadId || !newTaskDue || !newTaskAssignee) return;
 
-    addTask({
+    await addTask({
       lead_id: newTaskLeadId,
-      assigned_to: newTaskAssignee || "user_2", // Rohan Mehta
+      assigned_to: newTaskAssignee,
       task_type: newTaskType,
       due_at: new Date(newTaskDue).toISOString(),
       status: "PENDING",
@@ -74,17 +87,17 @@ export const SalesTasksView: React.FC = () => {
           </p>
         </div>
 
-        <button
+        {canCreateTask && <button
           onClick={() => setShowCreateTask(!showCreateTask)}
           className="bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-bold px-3 py-2 rounded-lg shadow-sm transition-colors flex items-center justify-center gap-1 cursor-pointer"
         >
           <Plus className="w-4 h-4" />
           <span>Add Manual Task</span>
-        </button>
+        </button>}
       </div>
 
       {/* Task Creation Drawer */}
-      {showCreateTask && (
+      {canCreateTask && showCreateTask && (
         <form onSubmit={handleCreateTask} className="bg-[#121214] border border-zinc-800 p-5 rounded-xl shadow-lg space-y-4 text-xs font-semibold text-zinc-300 animate-fade-in text-zinc-300">
           <h4 className="font-bold text-zinc-150 text-xs">Create Follow-up Callback Task</h4>
           
@@ -243,7 +256,7 @@ function filteredLeadsCountAndFilteredArray(
         <input
           type="checkbox"
           checked={resolved}
-          onChange={() => toggleTaskStatus(t.id)}
+          onChange={() => void toggleTaskStatus(t.id)}
           className="rounded border-zinc-800 text-indigo-600 focus:ring-indigo-500 h-4 w-4 mt-1 shrink-0 cursor-pointer"
           title="Toggle task completion status"
         />

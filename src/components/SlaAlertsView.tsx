@@ -57,8 +57,8 @@ export const SlaAlertsView: React.FC = () => {
     }
   };
 
-  const handleOverideAssign = (leadId: string, userId: string) => {
-    assignLead(leadId, userId);
+  const handleOverideAssign = async (leadId: string, userId: string) => {
+    await assignLead(leadId, userId);
     setOverrideLeadId(null);
   };
 
@@ -159,7 +159,7 @@ export const SlaAlertsView: React.FC = () => {
                           <div className="flex items-center space-x-1.5 justify-end">
                             <select
                               onChange={(e) => {
-                                if (e.target.value) handleOverideAssign(lead.id, e.target.value);
+                                if (e.target.value) void handleOverideAssign(lead.id, e.target.value);
                               }}
                               className="text-[10px] py-1 border border-zinc-750 rounded focus:outline-none focus:ring-1 focus:ring-indigo-500/50 p-1 bg-zinc-900 text-zinc-200 font-mono"
                               defaultValue=""

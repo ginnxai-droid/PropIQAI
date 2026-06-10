@@ -1,0 +1,3 @@
+-- Auth-backed development data is seeded with `npm run seed`.
+-- Keeping the seed in TypeScript allows Supabase Admin Auth users and their
+-- linked profiles to be created together. The script refuses production mode.

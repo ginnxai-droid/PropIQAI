@@ -1,31 +1,34 @@
-import React, { createContext, useContext, useState, useEffect } from "react";
 import {
-  Project,
-  User,
-  Lead,
-  Conversation,
-  Handoff,
-  SiteVisit,
-  FollowupTask,
-  Role,
-  LeadStatus,
-  Priority,
-  LeadSource,
-  BuyerType,
-  PurchaseTimeline,
+  createContext,
+  useCallback,
+  useContext,
+  useEffect,
+  useMemo,
+  useState,
+  type ReactNode,
+} from "react";
+import {
   Channel,
   HandoffReason,
+  LeadStatus,
+  Priority,
+  Role,
   SiteVisitStatus,
+  type Conversation,
+  type FollowupTask,
+  type Handoff,
+  type Lead,
+  type Project,
+  type SiteVisit,
+  type SlaEvent,
+  type User,
 } from "../types";
-import {
-  SAMPLE_PROJECTS,
-  SAMPLE_USERS,
-  SAMPLE_LEADS,
-  SAMPLE_CONVERSATIONS,
-  SAMPLE_HANDOFFS,
-  SAMPLE_SITE_VISITS,
-  SAMPLE_TASKS,
-} from "../sampleData";
+import { apiRequest } from "../lib/api";
+
+type NewLeadInput = Omit<
+  Lead,
+  "id" | "created_at" | "updated_at" | "priority"
+>;
 
 interface AppContextType {
   projects: Project[];
@@ -35,297 +38,558 @@ interface AppContextType {
   handoffs: Handoff[];
   siteVisits: SiteVisit[];
   tasks: FollowupTask[];
+  slaEvents: SlaEvent[];
   activePage: string;
   selectedLeadId: string | null;
   activeRole: Role;
+  organizationName: string;
+  loading: boolean;
+  error: string | null;
+  operationError: string | null;
+  clearOperationError: () => void;
   setActivePage: (page: string) => void;
   setSelectedLeadId: (id: string | null) => void;
-  setActiveRole: (role: Role) => void;
-  
-  // State Mutators for the demo
-  addLead: (lead: Omit<Lead, "id" | "created_at" | "updated_at">) => string;
-  updateLeadStatus: (leadId: string, status: LeadStatus) => void;
-  assignLead: (leadId: string, userId: string) => void;
-  scheduleSiteVisit: (visit: Omit<SiteVisit, "id" | "created_at" | "updated_at">) => void;
-  updateSiteVisitStatus: (visitId: string, status: any) => void;
-  addTask: (task: Omit<FollowupTask, "id" | "created_at" | "updated_at">) => void;
-  toggleTaskStatus: (taskId: string) => void;
-  addProject: (project: Project) => void;
-  addUser: (user: User) => void;
-  addConversationMessage: (leadId: string, speaker: "buyer" | "ai" | "human", text: string) => void;
+  refresh: () => Promise<void>;
+  addLead: (lead: NewLeadInput) => Promise<string>;
+  updateLead: (
+    leadId: string,
+    changes: Partial<
+      Pick<
+        Lead,
+        | "buyer_type"
+        | "apartment_preference"
+        | "budget_min"
+        | "budget_max"
+        | "purchase_timeline"
+        | "site_visit_interest"
+        | "score"
+        | "priority"
+        | "recommended_next_action"
+      >
+    >,
+  ) => Promise<void>;
+  updateLeadStatus: (leadId: string, status: LeadStatus) => Promise<void>;
+  assignLead: (leadId: string, userId: string) => Promise<void>;
+  scheduleSiteVisit: (
+    visit: Omit<SiteVisit, "id" | "created_at" | "updated_at">,
+  ) => Promise<void>;
+  updateSiteVisitStatus: (
+    visitId: string,
+    status: SiteVisitStatus,
+  ) => Promise<void>;
+  updateSiteVisitOutcome: (visitId: string, outcome: string) => Promise<void>;
+  addTask: (
+    task: Omit<FollowupTask, "id" | "created_at" | "updated_at">,
+  ) => Promise<void>;
+  toggleTaskStatus: (taskId: string) => Promise<void>;
+  addProject: (project: Project) => Promise<void>;
+  updateProject: (
+    projectId: string,
+    changes: Partial<
+      Pick<
+        Project,
+        | "name"
+        | "location"
+        | "developer_name"
+        | "rera_number"
+        | "price_min"
+        | "price_max"
+        | "possession_date"
+        | "description"
+        | "active"
+      >
+    >,
+  ) => Promise<void>;
+  createHandoff: (input: {
+    lead_id: string;
+    assigned_to: string;
+    reason: HandoffReason;
+    priority: Priority;
+    sla_deadline: string;
+  }) => Promise<void>;
+  addUser: (user: User) => Promise<void>;
+  addConversationMessage: (
+    leadId: string,
+    speaker: "buyer" | "ai" | "human",
+    text: string,
+  ) => Promise<void>;
+}
+
+interface RawMember {
+  id: string;
+  role: Role;
+  active: boolean;
+  profiles:
+    | {
+        id: string;
+        full_name: string;
+        email: string;
+        phone: string | null;
+        active: boolean;
+      }
+    | {
+        id: string;
+        full_name: string;
+        email: string;
+        phone: string | null;
+        active: boolean;
+      }[];
+  organization_member_projects: { project_id: string }[];
+}
+
+interface RawLead extends Omit<Lead, "isAfterHours"> {
+  is_after_hours: boolean;
+}
+
+interface BootstrapData {
+  organization: { id: string; name: string; slug: string };
+  role: Role;
+  projects: Project[];
+  leads: RawLead[];
+  conversations: Conversation[];
+  handoffs: Handoff[];
+  siteVisits: SiteVisit[];
+  tasks: FollowupTask[];
+  slaEvents: SlaEvent[];
+  members: RawMember[];
 }
 
 const AppContext = createContext<AppContextType | undefined>(undefined);
 
-export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
-  const [projects, setProjects] = useState<Project[]>(SAMPLE_PROJECTS);
-  const [users, setUsers] = useState<User[]>(SAMPLE_USERS);
-  const [leads, setLeads] = useState<Lead[]>(SAMPLE_LEADS);
-  const [conversations, setConversations] = useState<Conversation[]>(SAMPLE_CONVERSATIONS);
-  const [handoffs, setHandoffs] = useState<Handoff[]>(SAMPLE_HANDOFFS);
-  const [siteVisits, setSiteVisits] = useState<SiteVisit[]>(SAMPLE_SITE_VISITS);
-  const [tasks, setTasks] = useState<FollowupTask[]>(SAMPLE_TASKS);
-  
-  const [activePage, setActivePageState] = useState<string>("dashboard");
-  const [selectedLeadId, setSelectedLeadId] = useState<string | null>(null);
-  const [activeRole, setActiveRole] = useState<Role>(Role.MANAGER);
+function profileFromMember(member: RawMember) {
+  return Array.isArray(member.profiles) ? member.profiles[0] : member.profiles;
+}
 
-  const setActivePage = (page: string) => {
+function mergeConversations(rows: Conversation[]): Conversation[] {
+  const grouped = new Map<string, Conversation>();
+  for (const row of rows) {
+    const existing = grouped.get(row.lead_id);
+    if (!existing) {
+      grouped.set(row.lead_id, { ...row, transcript: [...row.transcript] });
+      continue;
+    }
+    existing.transcript.push(...row.transcript);
+    existing.key_questions = [
+      ...new Set([...existing.key_questions, ...row.key_questions]),
+    ];
+    existing.objections = [
+      ...new Set([...existing.objections, ...row.objections]),
+    ];
+    if (row.summary) {
+      existing.summary = row.summary;
+    }
+  }
+  return [...grouped.values()];
+}
+
+export function AppProvider({ children }: { children: ReactNode }) {
+  const [projects, setProjects] = useState<Project[]>([]);
+  const [users, setUsers] = useState<User[]>([]);
+  const [leads, setLeads] = useState<Lead[]>([]);
+  const [conversations, setConversations] = useState<Conversation[]>([]);
+  const [handoffs, setHandoffs] = useState<Handoff[]>([]);
+  const [siteVisits, setSiteVisits] = useState<SiteVisit[]>([]);
+  const [tasks, setTasks] = useState<FollowupTask[]>([]);
+  const [slaEvents, setSlaEvents] = useState<SlaEvent[]>([]);
+  const [activePage, setActivePageState] = useState("dashboard");
+  const [selectedLeadId, setSelectedLeadId] = useState<string | null>(null);
+  const [activeRole, setActiveRole] = useState<Role>(Role.EXECUTIVE);
+  const [organizationName, setOrganizationName] = useState("");
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const [operationError, setOperationError] = useState<string | null>(null);
+
+  useEffect(() => {
+    const onApiError = (event: Event) => {
+      setOperationError((event as CustomEvent<string>).detail);
+    };
+    window.addEventListener("propiq:api-error", onApiError);
+    return () => window.removeEventListener("propiq:api-error", onApiError);
+  }, []);
+
+  const refresh = useCallback(async () => {
+    setError(null);
+    try {
+      const response = await apiRequest<{ data: BootstrapData }>("/api/bootstrap");
+      const data = response.data;
+      setProjects(data.projects);
+      setLeads(
+        data.leads.map(({ is_after_hours, ...lead }) => ({
+          ...lead,
+          isAfterHours: is_after_hours,
+        })),
+      );
+      setConversations(mergeConversations(data.conversations));
+      setHandoffs(data.handoffs);
+      setSiteVisits(data.siteVisits);
+      setTasks(data.tasks);
+      setSlaEvents(data.slaEvents);
+      setActiveRole(data.role);
+      setOrganizationName(data.organization.name);
+      setUsers(
+        data.members.flatMap((member) => {
+          const profile = profileFromMember(member);
+          if (!profile) {
+            return [];
+          }
+          return [
+            {
+              id: profile.id,
+              name: profile.full_name,
+              email: profile.email,
+              phone: profile.phone ?? "",
+              role: member.role,
+              active: profile.active && member.active,
+              project_assignments: member.organization_member_projects.map(
+                (assignment) => assignment.project_id,
+              ),
+              max_hot_leads_per_day: 12,
+              created_at: "",
+              updated_at: "",
+            },
+          ];
+        }),
+      );
+    } catch (loadError) {
+      setError(
+        loadError instanceof Error
+          ? loadError.message
+          : "Application data could not be loaded.",
+      );
+      throw loadError;
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    void refresh().catch(() => undefined);
+  }, [refresh]);
+
+  const setActivePage = useCallback((page: string) => {
     setActivePageState(page);
     window.scrollTo({ top: 0, behavior: "smooth" });
-  };
+  }, []);
 
-  const addLead = (leadData: Omit<Lead, "id" | "created_at" | "updated_at">) => {
-    const newId = `lead_${leads.length + 1}`;
-    const nowStr = new Date().toISOString();
-    
-    // Auto calculate priority and scoring based on PRD logic
-    const score = leadData.score || 7.5;
-    let priority = Priority.WARM;
-    if (score >= 8.0) priority = Priority.HOT;
-    else if (score >= 6.0) priority = Priority.WARM;
-    else if (score >= 4.0) priority = Priority.NURTURE;
-    else priority = Priority.COLD;
+  const addLead = useCallback(
+    async (leadData: NewLeadInput) => {
+      const score = Number(leadData.score || 7.5);
+      const priority =
+        score >= 8
+          ? Priority.HOT
+          : score >= 6
+            ? Priority.WARM
+            : score >= 4
+              ? Priority.NURTURE
+              : Priority.COLD;
+      const response = await apiRequest<{ data: { id: string } }>("/api/leads", {
+        method: "POST",
+        body: JSON.stringify({
+          ...leadData,
+          score,
+          priority,
+          is_after_hours: leadData.isAfterHours ?? false,
+          isAfterHours: undefined,
+          email: leadData.email || null,
+        }),
+      });
+      await refresh();
+      return response.data.id;
+    },
+    [refresh],
+  );
 
-    const newLead: Lead = {
-      ...leadData,
-      id: newId,
-      score,
-      priority,
-      created_at: nowStr,
-      updated_at: nowStr,
-    };
+  const updateLeadStatus = useCallback(
+    async (leadId: string, status: LeadStatus) => {
+      await apiRequest(`/api/leads/${leadId}/status`, {
+        method: "POST",
+        body: JSON.stringify({ status }),
+      });
+      await refresh();
+    },
+    [refresh],
+  );
 
-    setLeads((prev) => [newLead, ...prev]);
+  const updateLead = useCallback(
+    async (
+      leadId: string,
+      changes: Partial<
+        Pick<
+          Lead,
+          | "buyer_type"
+          | "apartment_preference"
+          | "budget_min"
+          | "budget_max"
+          | "purchase_timeline"
+          | "site_visit_interest"
+          | "score"
+          | "priority"
+          | "recommended_next_action"
+        >
+      >,
+    ) => {
+      await apiRequest(`/api/leads/${leadId}`, {
+        method: "PATCH",
+        body: JSON.stringify(changes),
+      });
+      await refresh();
+    },
+    [refresh],
+  );
 
-    // Create an initial conversion summary
-    const newConv: Conversation = {
-      id: `conv_${conversations.length + 1}`,
-      lead_id: newId,
-      channel: Channel.FORM,
-      sentiment: "neutral",
-      key_questions: [],
-      objections: [],
-      summary: `Automated Lead intake for ${leadData.name}. Qualify and schedule callback.`,
-      transcript: [
-        { speaker: "ai", text: `Hi ${leadData.name}, welcome to PropIQ. One of our specialists will reach out about project ${projects.find(p => p.id === leadData.project_id)?.name || "selected project"} shortly.`, time: "Just Now" }
-      ],
-      created_at: nowStr,
-    };
-    setConversations((prev) => [newConv, ...prev]);
+  const assignLead = useCallback(
+    async (leadId: string, userId: string) => {
+      await apiRequest(`/api/leads/${leadId}/assign`, {
+        method: "POST",
+        body: JSON.stringify({ assigned_to: userId }),
+      });
+      await refresh();
+    },
+    [refresh],
+  );
 
-    return newId;
-  };
+  const scheduleSiteVisit = useCallback(
+    async (
+      visit: Omit<SiteVisit, "id" | "created_at" | "updated_at">,
+    ) => {
+      await apiRequest("/api/site-visits", {
+        method: "POST",
+        body: JSON.stringify(visit),
+      });
+      await refresh();
+    },
+    [refresh],
+  );
 
-  const updateLeadStatus = (leadId: string, status: LeadStatus) => {
-    const nowStr = new Date().toISOString();
-    setLeads((prev) =>
-      prev.map((l) => (l.id === leadId ? { ...l, status, updated_at: nowStr } : l))
-    );
-  };
+  const updateSiteVisitStatus = useCallback(
+    async (visitId: string, status: SiteVisitStatus) => {
+      await apiRequest(`/api/site-visits/${visitId}`, {
+        method: "PATCH",
+        body: JSON.stringify({ status }),
+      });
+      await refresh();
+    },
+    [refresh],
+  );
 
-  const assignLead = (leadId: string, userId: string) => {
-    const nowStr = new Date().toISOString();
-    
-    // Generate SLA Deadline for Hot/Warm leads
-    const lead = leads.find(l => l.id === leadId);
-    let sla_deadline: string | undefined = undefined;
-    
-    if (lead) {
-      const deadline = new Date();
-      if (lead.priority === Priority.HOT) {
-        deadline.setMinutes(deadline.getMinutes() + 10); // 10 minutes SLA
-      } else {
-        deadline.setHours(deadline.getHours() + 4); // 4 hours SLA
+  const updateSiteVisitOutcome = useCallback(
+    async (visitId: string, outcome: string) => {
+      await apiRequest(`/api/site-visits/${visitId}`, {
+        method: "PATCH",
+        body: JSON.stringify({ outcome }),
+      });
+      await refresh();
+    },
+    [refresh],
+  );
+
+  const addTask = useCallback(
+    async (
+      task: Omit<FollowupTask, "id" | "created_at" | "updated_at">,
+    ) => {
+      await apiRequest("/api/tasks", {
+        method: "POST",
+        body: JSON.stringify(task),
+      });
+      await refresh();
+    },
+    [refresh],
+  );
+
+  const toggleTaskStatus = useCallback(
+    async (taskId: string) => {
+      const task = tasks.find((candidate) => candidate.id === taskId);
+      if (!task) {
+        return;
       }
-      sla_deadline = deadline.toISOString();
-    }
+      const status =
+        task.status === "PENDING" || task.status === "OVERDUE"
+          ? "COMPLETED"
+          : "PENDING";
+      await apiRequest(`/api/tasks/${taskId}`, {
+        method: "PATCH",
+        body: JSON.stringify({ status }),
+      });
+      await refresh();
+    },
+    [refresh, tasks],
+  );
 
-    setLeads((prev) =>
-      prev.map((l) =>
-        l.id === leadId
-          ? {
-              ...l,
-              assigned_to: userId,
-              sla_deadline,
-              status: l.status === LeadStatus.NEW ? LeadStatus.CONTACTED : l.status,
-              updated_at: nowStr,
-            }
-          : l
-      )
-    );
+  const addProject = useCallback(
+    async (project: Project) => {
+      const { id: _id, created_at: _created, updated_at: _updated, ...input } =
+        project;
+      await apiRequest("/api/projects", {
+        method: "POST",
+        body: JSON.stringify(input),
+      });
+      await refresh();
+    },
+    [refresh],
+  );
 
-    // Create / Update Handoff
-    const newHandoff: Handoff = {
-      id: `hand_${handoffs.length + 1}`,
-      lead_id: leadId,
-      assigned_to: userId,
-      reason: lead?.site_visit_interest ? HandoffReason.SITE_VISIT_REQUEST : HandoffReason.HOT_LEAD,
-      priority: lead?.priority || Priority.WARM,
-      sla_deadline: sla_deadline || new Date(Date.now() + 3600000).toISOString(),
-      status: "PENDING",
-      created_at: nowStr,
-      updated_at: nowStr,
-    };
-    setHandoffs((prev) => [newHandoff, ...prev]);
+  const updateProject = useCallback(
+    async (
+      projectId: string,
+      changes: Partial<
+        Pick<
+          Project,
+          | "name"
+          | "location"
+          | "developer_name"
+          | "rera_number"
+          | "price_min"
+          | "price_max"
+          | "possession_date"
+          | "description"
+          | "active"
+        >
+      >,
+    ) => {
+      await apiRequest(`/api/projects/${projectId}`, {
+        method: "PATCH",
+        body: JSON.stringify(changes),
+      });
+      await refresh();
+    },
+    [refresh],
+  );
 
-    // Create Followup Task
-    const newTask: FollowupTask = {
-      id: `task_${tasks.length + 1}`,
-      lead_id: leadId,
-      assigned_to: userId,
-      task_type: "CALLBACK",
-      due_at: sla_deadline || new Date(Date.now() + 3600000).toISOString(),
-      status: "PENDING",
-      notes: "First manual response followup callback assigned by system manager.",
-      created_at: nowStr,
-      updated_at: nowStr,
-    };
-    setTasks((prev) => [newTask, ...prev]);
-  };
+  const createHandoff = useCallback(
+    async (input: {
+      lead_id: string;
+      assigned_to: string;
+      reason: HandoffReason;
+      priority: Priority;
+      sla_deadline: string;
+    }) => {
+      await apiRequest("/api/handoffs", {
+        method: "POST",
+        body: JSON.stringify(input),
+      });
+      await refresh();
+    },
+    [refresh],
+  );
 
-  const scheduleSiteVisit = (visitData: Omit<SiteVisit, "id" | "created_at" | "updated_at">) => {
-    const newId = `visit_${siteVisits.length + 1}`;
-    const nowStr = new Date().toISOString();
-    const newVisit: SiteVisit = {
-      ...visitData,
-      id: newId,
-      created_at: nowStr,
-      updated_at: nowStr,
-    };
-    setSiteVisits((prev) => [newVisit, ...prev]);
+  const addUser = useCallback(
+    async (user: User) => {
+      await apiRequest("/api/organization/members", {
+        method: "POST",
+        body: JSON.stringify({
+          full_name: user.name,
+          email: user.email,
+          phone: user.phone,
+          role: user.role,
+          project_ids: user.project_assignments,
+        }),
+      });
+      await refresh();
+    },
+    [refresh],
+  );
 
-    // Automatically transition lead status
-    updateLeadStatus(visitData.lead_id, LeadStatus.SITE_VISIT_SCHEDULED);
-    
-    // Add interactive prompt conversation
-    addConversationMessage(
-      visitData.lead_id,
-      "ai",
-      `Dynamic confirmation: Site visit successfully scheduled for ${visitData.preferred_date} at ${visitData.preferred_time}. Confirm details sent via automated WhatsApp channel.`
-    );
-  };
-
-  const updateSiteVisitStatus = (visitId: string, status: any) => {
-    const nowStr = new Date().toISOString();
-    setSiteVisits((prev) =>
-      prev.map((v) => (v.id === visitId ? { ...v, status, updated_at: nowStr } : v))
-    );
-
-    // Update associated lead status if completed
-    const visit = siteVisits.find((v) => v.id === visitId);
-    if (visit) {
-      if (status === SiteVisitStatus.COMPLETED) {
-        updateLeadStatus(visit.lead_id, LeadStatus.SITE_VISITED);
-      }
-    }
-  };
-
-  const addTask = (taskData: Omit<FollowupTask, "id" | "created_at" | "updated_at">) => {
-    const newId = `task_${tasks.length + 1}`;
-    const nowStr = new Date().toISOString();
-    const newTask: FollowupTask = {
-      ...taskData,
-      id: newId,
-      created_at: nowStr,
-      updated_at: nowStr,
-    };
-    setTasks((prev) => [newTask, ...prev]);
-  };
-
-  const toggleTaskStatus = (taskId: string) => {
-    setTasks((prev) =>
-      prev.map((t) =>
-        t.id === taskId
-          ? {
-              ...t,
-              status: t.status === "PENDING" || t.status === "OVERDUE" ? "COMPLETED" : "PENDING",
-              updated_at: new Date().toISOString(),
-            }
-          : t
-      )
-    );
-  };
-
-  const addProject = (project: Project) => {
-    setProjects((prev) => [...prev, project]);
-  };
-
-  const addUser = (user: User) => {
-    setUsers((prev) => [...prev, user]);
-  };
-
-  const addConversationMessage = (leadId: string, speaker: "buyer" | "ai" | "human", text: string) => {
-    setConversations((prev) => {
-      const idx = prev.findIndex((c) => c.lead_id === leadId);
-      const nowStr = new Date().toLocaleTimeString("en-US", { hour: "2-digit", minute: "2-digit" });
-      
-      if (idx > -1) {
-        return prev.map((c) =>
-          c.lead_id === leadId
-            ? {
-                ...c,
-                transcript: [...c.transcript, { speaker, text, time: nowStr }],
-              }
-            : c
-        );
-      } else {
-        const newConv: Conversation = {
-          id: `conv_${prev.length + 1}`,
-          lead_id: leadId,
+  const addConversationMessage = useCallback(
+    async (
+      leadId: string,
+      speaker: "buyer" | "ai" | "human",
+      text: string,
+    ) => {
+      await apiRequest(`/api/leads/${leadId}/conversations`, {
+        method: "POST",
+        body: JSON.stringify({
           channel: Channel.MANUAL,
+          speaker,
+          text,
+          summary: "Manual interaction log.",
           sentiment: "neutral",
           key_questions: [],
           objections: [],
-          summary: `Direct interaction log.`,
-          transcript: [{ speaker, text, time: nowStr }],
-          created_at: new Date().toISOString(),
-        };
-        return [newConv, ...prev];
-      }
-    });
-
-    // Update lead last contacting time
-    setLeads(prev => prev.map(l => l.id === leadId ? { ...l, last_contacted_at: new Date().toISOString(), updated_at: new Date().toISOString() } : l));
-  };
-
-  return (
-    <AppContext.Provider
-      value={{
-        projects,
-        users,
-        leads,
-        conversations,
-        handoffs,
-        siteVisits,
-        tasks,
-        activePage,
-        selectedLeadId,
-        activeRole,
-        setActivePage,
-        setSelectedLeadId,
-        setActiveRole,
-        addLead,
-        updateLeadStatus,
-        assignLead,
-        scheduleSiteVisit,
-        updateSiteVisitStatus,
-        addTask,
-        toggleTaskStatus,
-        addProject,
-        addUser,
-        addConversationMessage,
-      }}
-    >
-      {children}
-    </AppContext.Provider>
+        }),
+      });
+      await refresh();
+    },
+    [refresh],
   );
-};
 
-export const useApp = () => {
+  const value = useMemo<AppContextType>(
+    () => ({
+      projects,
+      users,
+      leads,
+      conversations,
+      handoffs,
+      siteVisits,
+      tasks,
+      slaEvents,
+      activePage,
+      selectedLeadId,
+      activeRole,
+      organizationName,
+      loading,
+      error,
+      operationError,
+      clearOperationError: () => setOperationError(null),
+      setActivePage,
+      setSelectedLeadId,
+      refresh,
+      addLead,
+      updateLead,
+      updateLeadStatus,
+      assignLead,
+      scheduleSiteVisit,
+      updateSiteVisitStatus,
+      updateSiteVisitOutcome,
+      addTask,
+      toggleTaskStatus,
+      addProject,
+      updateProject,
+      createHandoff,
+      addUser,
+      addConversationMessage,
+    }),
+    [
+      activePage,
+      activeRole,
+      addConversationMessage,
+      addLead,
+      addProject,
+      addTask,
+      addUser,
+      assignLead,
+      conversations,
+      createHandoff,
+      error,
+      handoffs,
+      leads,
+      loading,
+      organizationName,
+      operationError,
+      projects,
+      refresh,
+      scheduleSiteVisit,
+      selectedLeadId,
+      setActivePage,
+      siteVisits,
+      tasks,
+      slaEvents,
+      toggleTaskStatus,
+      updateLead,
+      updateLeadStatus,
+      updateProject,
+      updateSiteVisitOutcome,
+      updateSiteVisitStatus,
+      users,
+    ],
+  );
+
+  return <AppContext.Provider value={value}>{children}</AppContext.Provider>;
+}
+
+export function useApp() {
   const context = useContext(AppContext);
   if (!context) {
     throw new Error("useApp must be used within an AppProvider");
   }
   return context;
-};
+}
