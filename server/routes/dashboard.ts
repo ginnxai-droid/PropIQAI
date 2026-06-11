@@ -2,9 +2,11 @@ import { Router } from "express";
 import type { AuthenticatedRequest } from "../auth";
 import { getRequestAuth } from "../auth";
 import { requirePermission } from "../authorization";
+import type { AppConfig } from "../config";
 import { throwDatabaseError } from "../database";
 import { asyncHandler } from "../errors";
 import { summarizeSiteVisits } from "../../src/lib/siteVisitMetrics";
+import { refreshSlaState } from "../workflow/orchestrator";
 
 export const dashboardRouter = Router();
 
@@ -13,6 +15,10 @@ dashboardRouter.get(
   asyncHandler(async (request: AuthenticatedRequest, response) => {
     const auth = getRequestAuth(request);
     requirePermission(auth.role, "leads:read");
+    await refreshSlaState(
+      request.app.locals.config as AppConfig,
+      auth.organizationId,
+    );
     const [
       { data: leads, error: leadsError },
       { data: visits, error: visitsError },

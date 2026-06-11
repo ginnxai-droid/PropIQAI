@@ -1,5 +1,6 @@
 import { createAdminSupabaseClient } from "../server/supabase";
 import { loadConfig } from "../server/config";
+import { calculateLeadScore } from "../server/workflow/scoring";
 
 if (process.env.NODE_ENV === "production") {
   throw new Error("Development seed data cannot be loaded in production.");
@@ -218,6 +219,68 @@ async function ensureLead(
     first_response_at?: string;
   },
 ) {
+  const project = await requireData(
+    admin
+      .from("projects")
+      .select("price_min, price_max")
+      .eq("organization_id", organizationId)
+      .eq("id", projectId)
+      .single(),
+    `Load project for lead ${lead.phone}`,
+  );
+  const scoringProfile =
+    lead.priority === "HOT"
+      ? {
+          budget_min: Number(project.price_min),
+          budget_max: Number(project.price_max),
+          purchase_timeline: "IMMEDIATE",
+          buyer_type: "FAMILY_BUYER",
+          site_visit_interest: true,
+          engagement_quality: "HIGH" as const,
+          callback_responsiveness: "RESPONSIVE" as const,
+        }
+      : lead.priority === "WARM"
+        ? {
+            budget_min: Number(project.price_min),
+            budget_max: Number(project.price_max),
+            purchase_timeline: "THREE_TO_SIX_MONTHS",
+            buyer_type: "FAMILY_BUYER",
+            site_visit_interest: false,
+            engagement_quality: "LOW" as const,
+            callback_responsiveness: "DELAYED" as const,
+          }
+        : lead.priority === "NURTURE"
+          ? {
+              budget_min: 0,
+              budget_max: Math.round(Number(project.price_min) * 0.93),
+              purchase_timeline: "LONG_TERM",
+              buyer_type: "UNKNOWN",
+              site_visit_interest: false,
+              engagement_quality: "LOW" as const,
+              callback_responsiveness: "UNRESPONSIVE" as const,
+            }
+          : {
+              budget_min: 0,
+              budget_max: Math.round(Number(project.price_min) * 0.65),
+              purchase_timeline: "UNKNOWN",
+              buyer_type: "UNKNOWN",
+              site_visit_interest: false,
+              engagement_quality: "UNKNOWN" as const,
+              callback_responsiveness: "UNKNOWN" as const,
+            };
+  const scoring = calculateLeadScore({
+    projectPriceMin: Number(project.price_min),
+    projectPriceMax: Number(project.price_max),
+    budgetMin: scoringProfile.budget_min,
+    budgetMax: scoringProfile.budget_max,
+    purchaseTimeline: scoringProfile.purchase_timeline,
+    buyerType: scoringProfile.buyer_type,
+    siteVisitInterest: scoringProfile.site_visit_interest,
+    engagementQuality: scoringProfile.engagement_quality,
+    source: lead.source,
+    callbackResponsiveness: scoringProfile.callback_responsiveness,
+    handoffSignals: {},
+  });
   const existing = await optionalData<{ id: string }>(
     admin
       .from("leads")
@@ -233,22 +296,26 @@ async function ensureLead(
     project_id: projectId,
     assigned_to: assignedTo,
     ...lead,
-    buyer_type: "FAMILY_BUYER",
+    buyer_type: scoringProfile.buyer_type,
     apartment_preference: "2BHK",
-    budget_min: 7_500_000,
-    budget_max: 10_500_000,
-    purchase_timeline: "WITHIN_3_MONTHS",
-    site_visit_interest: lead.priority === "HOT",
-    score:
-      lead.priority === "HOT"
-        ? 9
-        : lead.priority === "WARM"
-          ? 7
-          : lead.priority === "NURTURE"
-            ? 4
-            : 2,
-    sla_deadline: new Date(Date.now() + 30 * 60_000).toISOString(),
-    ai_summary: "Development seed record. No AI processing was performed.",
+    budget_min: scoringProfile.budget_min,
+    budget_max: scoringProfile.budget_max,
+    purchase_timeline: scoringProfile.purchase_timeline,
+    site_visit_interest: scoringProfile.site_visit_interest,
+    engagement_quality: scoringProfile.engagement_quality,
+    callback_responsiveness: scoringProfile.callback_responsiveness,
+    handoff_signals: {},
+    score: scoring.total,
+    priority: scoring.priority,
+    score_components: scoring.components,
+    scoring_version: scoring.version,
+    score_explanation: scoring.explanation,
+    recalculated_at: scoring.recalculatedAt,
+    sla_deadline:
+      scoring.priority === "COLD"
+        ? null
+        : new Date(Date.now() + 30 * 60_000).toISOString(),
+    ai_summary: null,
     recommended_next_action: "Review and contact the buyer.",
   };
 
@@ -364,6 +431,7 @@ async function ensureHandoff(
       .select("id")
       .eq("organization_id", organizationId)
       .eq("lead_id", leadId)
+      .eq("reason", "HOT_LEAD")
       .in("status", ["PENDING", "CONTACTED", "ESCALATED"])
       .maybeSingle(),
     "Find development handoff",

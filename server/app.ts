@@ -14,6 +14,7 @@ import { leadsRouter } from "./routes/leads";
 import { organizationRouter } from "./routes/organization";
 import { projectsRouter } from "./routes/projects";
 import { siteVisitsRouter } from "./routes/siteVisits";
+import { slaRouter } from "./routes/sla";
 import { tasksRouter } from "./routes/tasks";
 
 interface CreateAppOptions {
@@ -65,6 +66,7 @@ export function createApp(options: CreateAppOptions = {}) {
   app.use("/api/leads", leadsRouter);
   app.use("/api/handoffs", handoffsRouter);
   app.use("/api/site-visits", siteVisitsRouter);
+  app.use("/api/sla", slaRouter);
   app.use("/api/tasks", tasksRouter);
   app.use("/api/organization", organizationRouter);
 

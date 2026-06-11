@@ -2,9 +2,12 @@ import { Router } from "express";
 import type { AuthenticatedRequest } from "../auth";
 import { getRequestAuth } from "../auth";
 import { requirePermission } from "../authorization";
+import type { AppConfig } from "../config";
 import { throwDatabaseError, writeAuditLog } from "../database";
 import { ApiError, asyncHandler } from "../errors";
+import { createAdminSupabaseClient } from "../supabase";
 import { siteVisitCreateSchema, siteVisitUpdateSchema } from "../validation";
+import { runLeadWorkflow } from "../workflow/orchestrator";
 
 export const siteVisitsRouter = Router();
 
@@ -76,6 +79,12 @@ siteVisitsRouter.post(
       action: "SITE_VISIT_CREATED",
       newValues: data,
     });
+    await runLeadWorkflow(request.app.locals.config as AppConfig, {
+      organizationId: auth.organizationId,
+      leadId: input.lead_id,
+      actorProfileId: auth.profileId,
+      requestedReasons: ["SITE_VISIT_REQUEST"],
+    });
     response.status(201).json({ data });
   }),
 );
@@ -113,6 +122,52 @@ siteVisitsRouter.patch(
       oldValues: oldVisit,
       newValues: data,
     });
+    if (input.status === "COMPLETED" && oldVisit.status !== "COMPLETED") {
+      const admin = createAdminSupabaseClient(
+        request.app.locals.config as AppConfig,
+      );
+      const assignedTo = data.assigned_to;
+      if (assignedTo) {
+        const { data: existingTask, error: existingTaskError } = await admin
+          .from("followup_tasks")
+          .select("id")
+          .eq("organization_id", auth.organizationId)
+          .eq("site_visit_id", data.id)
+          .eq("task_type", "POST_VISIT_FEEDBACK")
+          .maybeSingle();
+        throwDatabaseError(
+          existingTaskError,
+          "The post-visit task could not be checked.",
+        );
+        if (!existingTask) {
+          const { data: task, error: taskError } = await admin
+            .from("followup_tasks")
+            .insert({
+              organization_id: auth.organizationId,
+              lead_id: data.lead_id,
+              site_visit_id: data.id,
+              assigned_to: assignedTo,
+              task_type: "POST_VISIT_FEEDBACK",
+              due_at: new Date(Date.now() + 24 * 60 * 60_000).toISOString(),
+              status: "PENDING",
+              notes: data.outcome
+                ? `Post-visit follow-up: ${data.outcome}`
+                : "Capture post-visit feedback and next action.",
+            })
+            .select()
+            .single();
+          throwDatabaseError(taskError, "The post-visit task could not be created.");
+          await writeAuditLog(admin, {
+            organizationId: auth.organizationId,
+            actorProfileId: auth.profileId,
+            entityType: "followup_task",
+            entityId: task.id,
+            action: "POST_VISIT_TASK_CREATED",
+            newValues: task,
+          });
+        }
+      }
+    }
     response.json({ data });
   }),
 );

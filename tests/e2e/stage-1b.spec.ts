@@ -43,7 +43,7 @@ test("valid roles use database authorization, refresh sessions, and log out", as
     if (account.role === "EXECUTIVE") {
       await expect(page.getByRole("button", { name: /^Edit / })).toHaveCount(0);
       await page.getByRole("button", { name: "Settings & Webhook" }).click();
-      await expect(page.getByText("Not yet available. Webhook")).toBeVisible();
+      await expect(page.getByText("Not available. Webhook")).toBeVisible();
       await expect(page.locator("main input, main select, main textarea")).toHaveCount(
         0,
       );
@@ -117,12 +117,21 @@ test("project and lead workflow persists across reload and a new session", async
   await page.getByRole("button", { name: "Create Lead" }).click();
   await expect(page.getByText(leadName, { exact: true })).toBeVisible();
 
-  await page.locator('input[name="score"]').fill("8.5");
+  await page.getByLabel("Buyer type").selectOption("FAMILY_BUYER");
+  await page.getByLabel("Budget minimum").fill("6000000");
+  await page.getByLabel("Budget maximum").fill("9000000");
+  await page.getByLabel("Purchase timeline").selectOption("IMMEDIATE");
+  await page.getByLabel("Engagement quality").selectOption("HIGH");
+  await page
+    .getByLabel("Callback responsiveness")
+    .selectOption("RESPONSIVE");
+  await page.getByLabel("Interested in a site visit").check();
   await page
     .locator('textarea[name="recommended_next_action"]')
     .fill(`Follow up ${marker}`);
   await page.getByRole("button", { name: "Save Qualification" }).click();
-  await expect(page.getByText("8.5")).toBeVisible();
+  await expect(page.getByText(/Model stage-2-v1/)).toBeVisible();
+  await expect(page.getByText(/total: 9\.[0-9]\/10 \(HOT\)/)).toBeVisible();
 
   await page
     .getByPlaceholder(/Log executive callback discussion text/)
@@ -130,18 +139,12 @@ test("project and lead workflow persists across reload and a new session", async
   await page.getByTitle("Append message to timeline log").click();
   await expect(page.getByText(`Persistence conversation ${marker}`)).toBeVisible();
 
-  await page
-    .getByLabel("Handoff assignee")
-    .selectOption({ label: "Demo Executive" });
-  await page.getByRole("button", { name: /Create Handoff|Update Handoff/ }).click();
-  await expect(page.getByRole("button", { name: "Update Handoff" })).toBeVisible();
-
   await page.reload();
   const persistedLeadRow = page.getByRole("row", { name: new RegExp(leadName) });
   await expect(persistedLeadRow).toBeVisible();
   await persistedLeadRow.getByRole("button", { name: "Review Takeover" }).click();
   await expect(page.getByText(`Persistence conversation ${marker}`)).toBeVisible();
-  await expect(page.getByText("8.5")).toBeVisible();
+  await expect(page.getByText(/total: 9\.[0-9]\/10 \(HOT\)/)).toBeVisible();
 
   await page.getByTitle("Sign out").click();
   await context.close();

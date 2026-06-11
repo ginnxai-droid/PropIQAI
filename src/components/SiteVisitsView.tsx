@@ -150,7 +150,7 @@ export const SiteVisitsView: React.FC = () => {
                     </div>
                     <div className="p-2.5 bg-zinc-900 rounded-lg border border-zinc-800 font-sans">
                       <span className="block text-[10px] text-zinc-500 font-mono">Direction Pin</span>
-                      <span className="font-bold text-emerald-400 block truncate" title="Pin Sent">Sent on WhatsApp</span>
+                      <span className="font-bold text-zinc-500 block truncate">Not available</span>
                     </div>
                   </div>
 
@@ -199,24 +199,27 @@ export const SiteVisitsView: React.FC = () => {
                 {/* Right Interactive operations queue panel */}
                 <div className="p-5 lg:w-1/4 shrink-0 flex flex-col justify-between space-y-4">
                   <div className="space-y-1 bg-zinc-900/60 p-2.5 rounded-lg border border-zinc-805 text-[11px] font-semibold text-zinc-400">
-                    <span className="text-[9px] text-zinc-500 uppercase tracking-widest block font-bold mb-1 font-mono">WhatsApp Reminder Schedule</span>
-                    <div className="flex items-center justify-between text-emerald-430">
-                      <span>✓ Confirmation (SMS)</span>
-                      <span className="font-mono text-[9px] font-bold">Sent</span>
-                    </div>
-                    <div className="flex items-center justify-between text-zinc-500">
-                      <span>• T-24h (WhatsApp Reminder)</span>
-                      <span className="font-mono text-[9px]">Pending</span>
-                    </div>
-                    <div className="flex items-center justify-between text-zinc-500">
-                      <span>• T-2h (Direction GPS & Cab)</span>
-                      <span className="font-mono text-[9px]">Pending</span>
-                    </div>
+                    <span className="text-[9px] text-zinc-500 uppercase tracking-widest block font-bold mb-1 font-mono">External Reminder Delivery</span>
+                    <span className="font-mono text-[10px] text-zinc-500">Not available</span>
                   </div>
 
                   {/* Actions status line toggles */}
                   <div className="space-y-1.5 font-sans">
                     <span className="text-[9px] text-zinc-550 uppercase tracking-wider block font-semibold font-mono">Change Status Line</span>
+                    <div className="flex gap-1.5 text-[10px]">
+                      <button
+                        onClick={() => void handleUpdateStatus(visit.id, SiteVisitStatus.CONFIRMED)}
+                        className="flex-1 bg-indigo-500/10 text-indigo-400 border border-indigo-500/20 p-2 rounded-lg font-bold"
+                      >
+                        Confirm
+                      </button>
+                      <button
+                        onClick={() => void handleUpdateStatus(visit.id, SiteVisitStatus.RESCHEDULED)}
+                        className="flex-1 bg-amber-500/10 text-amber-400 border border-amber-500/20 p-2 rounded-lg font-bold"
+                      >
+                        Reschedule
+                      </button>
+                    </div>
                     <div className="flex gap-1.5 text-[10px]">
                       <button
                         onClick={() => void handleUpdateStatus(visit.id, SiteVisitStatus.COMPLETED)}

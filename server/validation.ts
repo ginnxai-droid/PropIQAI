@@ -9,6 +9,16 @@ const phone = z
 const email = z.string().trim().email().max(254);
 const uuid = z.string().uuid();
 const optionalUrl = z.union([z.string().url(), z.literal(""), z.null()]).optional();
+const handoffSignals = z
+  .object({
+    price_negotiation: z.boolean().optional(),
+    booking_request: z.boolean().optional(),
+    compliance_question: z.boolean().optional(),
+    angry_or_confused: z.boolean().optional(),
+    human_requested: z.boolean().optional(),
+    serious_competitor_comparison: z.boolean().optional(),
+  })
+  .default({});
 
 const projectFields = z.object({
   name: z.string().trim().min(2).max(200),
@@ -101,10 +111,13 @@ const leadFields = z.object({
     "UNKNOWN",
   ]),
   site_visit_interest: z.boolean().default(false),
-  score: z.coerce.number().min(1).max(10),
-  priority: z.enum(["HOT", "WARM", "NURTURE", "COLD"]),
-  assigned_to: uuid.nullable().optional(),
-  sla_deadline: z.iso.datetime().nullable().optional(),
+  engagement_quality: z
+    .enum(["HIGH", "MEDIUM", "LOW", "UNKNOWN"])
+    .default("UNKNOWN"),
+  callback_responsiveness: z
+    .enum(["RESPONSIVE", "DELAYED", "UNRESPONSIVE", "UNKNOWN"])
+    .default("UNKNOWN"),
+  handoff_signals: handoffSignals,
   first_response_at: z.iso.datetime().nullable().optional(),
   last_contacted_at: z.iso.datetime().nullable().optional(),
   next_followup_at: z.iso.datetime().nullable().optional(),
@@ -125,7 +138,6 @@ export const leadUpdateSchema = leadFields
   .partial()
   .omit({
     project_id: true,
-    assigned_to: true,
   })
   .refine(
     (value) =>
@@ -179,8 +191,6 @@ export const handoffCreateSchema = z.object({
     "HUMAN_REQUESTED",
     "COMPETITOR_COMPARISON",
   ]),
-  priority: z.enum(["HOT", "WARM", "NURTURE", "COLD"]),
-  sla_deadline: z.iso.datetime(),
 });
 
 export const siteVisitCreateSchema = z.object({

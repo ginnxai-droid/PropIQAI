@@ -5,7 +5,7 @@ import { summarizeSiteVisits } from "../lib/siteVisitMetrics";
 
 function formatDuration(seconds: number | null) {
   if (seconds === null) {
-    return "Not yet available";
+    return "Not available";
   }
   if (seconds < 60) {
     return `${seconds} seconds`;
@@ -79,14 +79,14 @@ Confirmed site visits: ${metrics.confirmedSiteVisits}
 Completed site visits: ${metrics.completedSiteVisits}
 Active visit records: ${metrics.activeVisitRecords}
 Average first response: ${formatDuration(metrics.averageFirstResponseSeconds)}
-Measured SLA adherence: ${metrics.slaAdherence === null ? "Not yet available" : `${metrics.slaAdherence}%`}
+Measured SLA adherence: ${metrics.slaAdherence === null ? "Not available" : `${metrics.slaAdherence}%`}
 
-Revenue opportunity: Not yet available.
-Automated call recovery rate: Not yet available.
-WhatsApp response performance: Not yet available.
+Revenue opportunity: Not available.
+Automated call recovery rate: Not available.
+WhatsApp response performance: Not available.
 
 Notes:
-- Values above are calculated only from persisted Stage 1 records.
+- Values above are calculated only from persisted Stage 2 workflow records.
 - Revenue and channel-delivery claims require verified external source events.
 - This report is not evidence of production readiness.`);
   };
@@ -124,7 +124,7 @@ Notes:
           ["Average First Response", formatDuration(metrics.averageFirstResponseSeconds)],
           [
             "Measured SLA Adherence",
-            metrics.slaAdherence === null ? "Not yet available" : `${metrics.slaAdherence}%`,
+            metrics.slaAdherence === null ? "Not available" : `${metrics.slaAdherence}%`,
           ],
         ].map(([label, value]) => (
           <div key={label} className="bg-[#121214] p-5 border border-zinc-800 rounded-xl">
@@ -135,8 +135,8 @@ Notes:
       </div>
 
       <div className="rounded-xl border border-amber-500/20 bg-amber-500/10 p-4 text-xs text-amber-200">
-        Revenue opportunity and external channel recovery metrics are not yet
-        available in Stage 1.
+        Revenue opportunity and external channel recovery metrics are Not
+        available in Stage 2.
       </div>
 
       {generatedReport && (

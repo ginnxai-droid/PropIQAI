@@ -2,9 +2,11 @@ import { Router } from "express";
 import type { AuthenticatedRequest } from "../auth";
 import { getRequestAuth } from "../auth";
 import { requirePermission } from "../authorization";
-import { throwDatabaseError, writeAuditLog } from "../database";
+import type { AppConfig } from "../config";
+import { throwDatabaseError } from "../database";
 import { ApiError, asyncHandler } from "../errors";
 import { handoffCreateSchema } from "../validation";
+import { runLeadWorkflow } from "../workflow/orchestrator";
 
 export const handoffsRouter = Router();
 
@@ -47,40 +49,33 @@ handoffsRouter.post(
       );
     }
 
-    const { data: existing, error: existingError } = await auth.supabase
-      .from("handoffs")
-      .select("id")
-      .eq("organization_id", auth.organizationId)
-      .eq("lead_id", input.lead_id)
-      .in("status", ["PENDING", "CONTACTED", "ESCALATED"])
-      .maybeSingle();
-    throwDatabaseError(existingError, "The existing handoff could not be checked.");
-
-    const values = {
-      ...input,
-      organization_id: auth.organizationId,
-      status: "PENDING",
-      escalated_to: null,
-      completed_at: null,
-    };
-    const operation = existing
-      ? auth.supabase
-          .from("handoffs")
-          .update(values)
-          .eq("organization_id", auth.organizationId)
-          .eq("id", existing.id)
-      : auth.supabase.from("handoffs").insert(values);
-    const { data, error } = await operation.select().single();
-    throwDatabaseError(error, "The handoff could not be created.");
-
-    await writeAuditLog(auth.supabase, {
-      organizationId: auth.organizationId,
-      actorProfileId: auth.profileId,
-      entityType: "handoff",
-      entityId: data.id,
-      action: "HANDOFF_CREATED",
-      newValues: data,
-    });
+    const { error: assignmentError } = await auth.supabase.rpc(
+      "assign_lead_secure",
+      {
+        target_lead_id: input.lead_id,
+        target_profile_id: input.assigned_to,
+      },
+    );
+    throwDatabaseError(assignmentError, "The handoff assignee could not be applied.");
+    const workflow = await runLeadWorkflow(
+      request.app.locals.config as AppConfig,
+      {
+        organizationId: auth.organizationId,
+        leadId: input.lead_id,
+        actorProfileId: auth.profileId,
+        requestedReasons: [input.reason],
+      },
+    );
+    const data = workflow.handoffs.find(
+      (handoff) => handoff.reason === input.reason,
+    );
+    if (!data) {
+      throw new ApiError(
+        400,
+        "The handoff did not produce an active SLA.",
+        "HANDOFF_NOT_APPLICABLE",
+      );
+    }
     response.status(201).json({ data });
   }),
 );

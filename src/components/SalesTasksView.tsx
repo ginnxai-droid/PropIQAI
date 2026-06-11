@@ -123,7 +123,7 @@ export const SalesTasksView: React.FC = () => {
                 className="p-2 border border-zinc-800 rounded-lg bg-zinc-900 text-zinc-200 focus:outline-none focus:ring-1 focus:ring-indigo-500/55"
               >
                 <option value="CALLBACK">Callback Discussion</option>
-                <option value="SEND_BROCHURE">Send WhatsApp Brochure</option>
+                <option value="SEND_BROCHURE">Send Brochure</option>
                 <option value="CONFIRM_VISIT">Confirm Site Visit</option>
                 <option value="POST_VISIT_FEEDBACK">Post Visit Review</option>
               </select>

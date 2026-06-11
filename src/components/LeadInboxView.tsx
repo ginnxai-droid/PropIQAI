@@ -192,7 +192,9 @@ export const LeadInboxView: React.FC = () => {
       budget_max: 0,
       purchase_timeline: PurchaseTimeline.UNKNOWN,
       site_visit_interest: false,
-      score: 5,
+      engagement_quality: "UNKNOWN",
+      callback_responsiveness: "UNKNOWN",
+      handoff_signals: {},
       assigned_to: undefined,
       ai_summary: "",
       recommended_next_action: "",
@@ -694,10 +696,10 @@ export const LeadInboxView: React.FC = () => {
             
             <h3 className="font-bold text-zinc-100 text-md flex items-center gap-1.5">
               <Calendar className="w-5 h-5 text-emerald-400" />
-              Book Site Visit Appointment
+              Schedule Site Visit
             </h3>
             <p className="text-xs text-zinc-400 mt-1">
-              Input visitor constraints. Booking transitions the lead status to "SITE_VISIT_SCHEDULED" and enqueues WhatsApp confirmation logs.
+              Input visitor constraints. The visit and lead status are persisted; external reminders are Not available.
             </p>
 
             <form onSubmit={handleScheduleVisitSubmit} className="mt-4 space-y-4 text-xs font-semibold text-zinc-300">

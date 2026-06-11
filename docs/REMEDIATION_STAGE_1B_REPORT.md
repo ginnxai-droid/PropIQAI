@@ -264,8 +264,8 @@ The closure work added or updated:
 - reporting reconciliation coverage and data dictionary;
 - package scripts, dependencies, ignore rules, and this report.
 
-The worktree also contains the broader uncommitted Stage 1 foundation from the
-current remediation branch.
+The broader Stage 1 foundation and this closure evidence are committed together
+on the current remediation branch.
 
 ## 14. Remaining P0 Blockers
 
@@ -276,9 +276,9 @@ Stage 1 closure. See `docs/STAGE_1_FINAL_CLOSURE.md`.
 
 ## 15. Commit Status
 
-All Stage 1 closure criteria now pass. The final Stage 1 commit may be created
-on the active remediation branch. Secrets, Supabase temporary metadata,
-generated builds, test artifacts, and database backup artifacts remain
-excluded.
+All Stage 1 closure criteria pass. The final Stage 1 closure is committed as
+`e659983` on the active `remediation/stage-1-secure-foundation` branch.
+Secrets, Supabase temporary metadata, generated builds, test artifacts, and
+database backup artifacts remain excluded.
 
 Stage 2 was not started as part of this work.

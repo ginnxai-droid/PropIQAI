@@ -45,7 +45,7 @@ export const DashboardView: React.FC = () => {
     (l) => l.source === LeadSource.MISSED_CALL && Boolean(l.first_response_at)
   ).length;
   
-  const { confirmedSiteVisits } = summarizeSiteVisits(siteVisits);
+  const { confirmedSiteVisits, completedSiteVisits } = summarizeSiteVisits(siteVisits);
 
   const slaBreaches = slaEvents.filter(
     (event) =>
@@ -251,6 +251,22 @@ export const DashboardView: React.FC = () => {
         </div>
 
         {/* Metric 8 */}
+        <div className="bg-[#121214] p-5 rounded-xl border border-zinc-800/80 hover:border-zinc-750 transition-all duration-200">
+          <div className="flex items-center justify-between">
+            <span className="text-xs font-semibold text-zinc-400 uppercase tracking-wider">Completed Site Visits</span>
+            <span className="p-1.5 bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 rounded-lg">
+              <CalendarCheck className="w-4 h-4" />
+            </span>
+          </div>
+          <div className="mt-4 flex items-baseline justify-between">
+            <span className="text-2xl font-bold tracking-tight text-white">{completedSiteVisits}</span>
+            <span className="text-[10px] text-emerald-400 bg-emerald-500/10 border border-emerald-500/20 px-1.5 py-0.5 rounded-md font-medium">
+              Persisted
+            </span>
+          </div>
+        </div>
+
+        {/* Metric 9 */}
         <div className="bg-rose-950/10 p-5 rounded-xl border border-rose-500/20 hover:border-rose-500/30 transition-all">
           <div className="flex items-center justify-between">
             <span className="text-xs font-bold text-rose-450 uppercase tracking-wider">SLA Breached</span>

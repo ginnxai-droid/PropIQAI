@@ -1,5 +1,6 @@
-import React, { useState } from "react";
+import React, { useEffect, useState } from "react";
 import { useApp } from "../context/AppContext";
+import { apiRequest } from "../lib/api";
 import {
   Sparkles,
   Phone,
@@ -22,6 +23,8 @@ import {
   LeadStatus,
   Priority,
   PurchaseTimeline,
+  type Lead,
+  type TimelineEvent,
 } from "../types";
 
 export const LeadDetailView: React.FC = () => {
@@ -43,6 +46,19 @@ export const LeadDetailView: React.FC = () => {
   } = useApp();
 
   const [manualText, setManualText] = useState("");
+  const [timeline, setTimeline] = useState<TimelineEvent[]>([]);
+
+  useEffect(() => {
+    if (!selectedLeadId) {
+      setTimeline([]);
+      return;
+    }
+    void apiRequest<{ data: TimelineEvent[] }>(
+      `/api/leads/${selectedLeadId}/timeline`,
+    )
+      .then((response) => setTimeline(response.data))
+      .catch(() => setTimeline([]));
+  }, [selectedLeadId, leads, handoffs, siteVisits, tasks, conversations]);
 
   // Handler if no lead is selected
   if (!selectedLeadId) {
@@ -53,7 +69,7 @@ export const LeadDetailView: React.FC = () => {
         </div>
         <h3 className="text-md font-bold text-zinc-100">Select a Lead to review qualification</h3>
         <p className="text-xs text-zinc-400 max-w-sm mx-auto mt-1 leading-relaxed">
-          Open the Unified Lead Inbox or Dashboard list to review a hot lead take-over files, AI summary context, objections logs, and live chats.
+          Open the Lead Inbox or Dashboard to review qualification, score, handoff, SLA, visit, task, and timeline records.
         </p>
       </div>
     );
@@ -101,7 +117,6 @@ export const LeadDetailView: React.FC = () => {
   const handleQualificationUpdate = async (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     const values = new FormData(event.currentTarget);
-    const score = Number(values.get("score"));
     await updateLead(lead.id, {
       buyer_type: values.get("buyer_type") as BuyerType,
       apartment_preference: String(values.get("apartment_preference") ?? ""),
@@ -109,15 +124,19 @@ export const LeadDetailView: React.FC = () => {
       budget_max: Number(values.get("budget_max")),
       purchase_timeline: values.get("purchase_timeline") as PurchaseTimeline,
       site_visit_interest: values.get("site_visit_interest") === "on",
-      score,
-      priority:
-        score >= 8
-          ? Priority.HOT
-          : score >= 6
-            ? Priority.WARM
-            : score >= 4
-              ? Priority.NURTURE
-              : Priority.COLD,
+      engagement_quality: values.get("engagement_quality") as Lead["engagement_quality"],
+      callback_responsiveness: values.get(
+        "callback_responsiveness",
+      ) as Lead["callback_responsiveness"],
+      handoff_signals: {
+        price_negotiation: values.get("price_negotiation") === "on",
+        booking_request: values.get("booking_request") === "on",
+        compliance_question: values.get("compliance_question") === "on",
+        angry_or_confused: values.get("angry_or_confused") === "on",
+        human_requested: values.get("human_requested") === "on",
+        serious_competitor_comparison:
+          values.get("serious_competitor_comparison") === "on",
+      },
       recommended_next_action: String(
         values.get("recommended_next_action") ?? "",
       ),
@@ -127,13 +146,10 @@ export const LeadDetailView: React.FC = () => {
   const handleHandoffCreate = async (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     const values = new FormData(event.currentTarget);
-    const deadline = String(values.get("sla_deadline"));
     await createHandoff({
       lead_id: lead.id,
       assigned_to: String(values.get("assigned_to")),
       reason: values.get("reason") as HandoffReason,
-      priority: lead.priority,
-      sla_deadline: new Date(deadline).toISOString(),
     });
   };
 
@@ -298,18 +314,32 @@ export const LeadDetailView: React.FC = () => {
               ))}
             </select>
           </label>
-          <label className="block text-zinc-400">
-            Qualification score
-            <input
-              name="score"
-              type="number"
-              min="1"
-              max="10"
-              step="0.1"
-              defaultValue={lead.score}
-              className="mt-1 w-full rounded-lg border border-zinc-800 bg-zinc-900 p-2 text-zinc-100"
-            />
-          </label>
+          <div className="grid grid-cols-2 gap-2">
+            <label className="text-zinc-400">
+              Engagement quality
+              <select
+                name="engagement_quality"
+                defaultValue={lead.engagement_quality}
+                className="mt-1 w-full rounded-lg border border-zinc-800 bg-zinc-900 p-2 text-zinc-100"
+              >
+                {["HIGH", "MEDIUM", "LOW", "UNKNOWN"].map((value) => (
+                  <option key={value} value={value}>{value}</option>
+                ))}
+              </select>
+            </label>
+            <label className="text-zinc-400">
+              Callback responsiveness
+              <select
+                name="callback_responsiveness"
+                defaultValue={lead.callback_responsiveness}
+                className="mt-1 w-full rounded-lg border border-zinc-800 bg-zinc-900 p-2 text-zinc-100"
+              >
+                {["RESPONSIVE", "DELAYED", "UNRESPONSIVE", "UNKNOWN"].map((value) => (
+                  <option key={value} value={value}>{value}</option>
+                ))}
+              </select>
+            </label>
+          </div>
           <label className="flex items-center gap-2 text-zinc-400">
             <input
               name="site_visit_interest"
@@ -318,6 +348,32 @@ export const LeadDetailView: React.FC = () => {
             />
             Interested in a site visit
           </label>
+          <div className="grid grid-cols-2 gap-2 rounded-lg border border-zinc-800 p-3 text-zinc-400">
+            {[
+              ["price_negotiation", "Price negotiation"],
+              ["booking_request", "Booking or unit block"],
+              ["compliance_question", "Legal, RERA, payment, possession"],
+              ["angry_or_confused", "Angry or confused"],
+              ["human_requested", "Human requested"],
+              ["serious_competitor_comparison", "Serious competitor comparison"],
+            ].map(([name, label]) => (
+              <label key={name} className="flex items-center gap-2">
+                <input
+                  name={name}
+                  type="checkbox"
+                  defaultChecked={Boolean(
+                    lead.handoff_signals?.[
+                      name as keyof typeof lead.handoff_signals
+                    ],
+                  )}
+                />
+                {label}
+              </label>
+            ))}
+          </div>
+          <p className="rounded-lg border border-indigo-500/20 bg-indigo-500/5 p-2 text-indigo-300">
+            Score and priority are recalculated by the Stage 2 server workflow.
+          </p>
           <label className="block text-zinc-400">
             Recommended next action
             <textarea
@@ -334,6 +390,26 @@ export const LeadDetailView: React.FC = () => {
             Save Qualification
           </button>
         </form>
+
+        <div className="rounded-xl border border-zinc-800 bg-[#121214] p-5 text-xs">
+          <h4 className="font-bold uppercase tracking-wider text-zinc-300">
+            Score Explanation
+          </h4>
+          <p className="mt-2 text-zinc-400">{lead.score_explanation || "Pending recalculation."}</p>
+          <div className="mt-3 grid grid-cols-2 gap-2">
+            {Object.entries(lead.score_components ?? {}).map(([name, component]) => (
+              <div key={name} className="rounded-lg border border-zinc-800 bg-zinc-900 p-2">
+                <span className="block text-[9px] uppercase text-zinc-500">{name.replace(/_/g, " ")}</span>
+                <span className="font-mono font-bold text-indigo-400">
+                  {component.normalized}/10 · {Math.round(component.weight * 100)}%
+                </span>
+              </div>
+            ))}
+          </div>
+          <p className="mt-2 text-[10px] text-zinc-500">
+            Model {lead.scoring_version || "stage-2-v1"} · recalculated {lead.recalculated_at ? new Date(lead.recalculated_at).toLocaleString() : "Not available"}
+          </p>
+        </div>
 
         {/* Action Controls for Status */}
         <div className="bg-[#121214] rounded-xl border border-zinc-800 shadow-sm p-5 space-y-3">
@@ -380,7 +456,7 @@ export const LeadDetailView: React.FC = () => {
         </div>
       </div>
 
-      {/* COLUMN 2 & 3: Chat Timeline & AI Insights */}
+      {/* COLUMN 2 & 3: Timeline and qualification context */}
       <div className="xl:col-span-2 space-y-6">
         
         {/* Handoff process warning if SLA active */}
@@ -407,14 +483,14 @@ export const LeadDetailView: React.FC = () => {
           </div>
         )}
 
-        {/* AI INTEL SUMMARY WIDGET */}
+        {/* Optional generated or imported qualification notes */}
         <div className="bg-[#16121f] border border-purple-500/20 rounded-xl p-5 shadow-sm relative">
           <div className="absolute top-2.5 right-3 flex items-center space-x-1 bg-purple-550/10 text-purple-400 px-2 py-0.5 rounded border border-purple-500/20 font-mono text-[9px] font-extrabold uppercase shrink-0">
             <Sparkles className="w-3 h-3 text-purple-400 fill-purple-500/20" />
-            <span>AI Qualification Intel Summary</span>
+            <span>Qualification Context</span>
           </div>
 
-          <h4 className="font-extrabold text-purple-400 text-xs uppercase tracking-widest font-mono mb-2">Intelligent Synthesis</h4>
+          <h4 className="font-extrabold text-purple-400 text-xs uppercase tracking-widest font-mono mb-2">Persisted Qualification Notes</h4>
           
           <div className="space-y-3.5 text-xs text-zinc-300">
             {lead.ai_summary ? (
@@ -422,7 +498,7 @@ export const LeadDetailView: React.FC = () => {
                 "{lead.ai_summary}"
               </p>
             ) : (
-              <p className="text-zinc-500 italic">No AI summary generated yet for this draft lead.</p>
+              <p className="text-zinc-500 italic">No generated summary is available.</p>
             )}
 
             {/* Questions Objections and Next action lists */}
@@ -470,7 +546,7 @@ export const LeadDetailView: React.FC = () => {
               Qualification Conversation Transcript
             </h4>
             <span className="text-[10px] bg-zinc-800 border border-zinc-850 font-mono px-2 py-0.5 rounded text-zinc-400 font-medium uppercase">
-              {conversation?.channel || "WhatsApp"}
+              {conversation?.channel || "Not available"}
             </span>
           </div>
 
@@ -560,14 +636,14 @@ export const LeadDetailView: React.FC = () => {
                   </div>
                 ))
               ) : (
-                <span className="text-zinc-500 italic block font-medium">No site visit booked for this client yet. Use "Site Visits" or Lead Inbox to schedule.</span>
+                <span className="text-zinc-500 italic block font-medium">No site visit record exists for this client. Use Site Visits or Lead Inbox to schedule one.</span>
               )}
             </div>
           </div>
           {canCreateHandoff && (
             <form
               onSubmit={handleHandoffCreate}
-              className="grid grid-cols-1 gap-3 border-t border-zinc-800 pt-4 text-xs md:grid-cols-4"
+              className="grid grid-cols-1 gap-3 border-t border-zinc-800 pt-4 text-xs md:grid-cols-3"
             >
               <label className="text-zinc-400">
                 Handoff assignee
@@ -595,18 +671,6 @@ export const LeadDetailView: React.FC = () => {
                   ))}
                 </select>
               </label>
-              <label className="text-zinc-400">
-                SLA deadline
-                <input
-                  name="sla_deadline"
-                  type="datetime-local"
-                  defaultValue={new Date(Date.now() + 60 * 60 * 1000)
-                    .toISOString()
-                    .slice(0, 16)}
-                  className="mt-1 w-full rounded-lg border border-zinc-800 bg-zinc-900 p-2 text-zinc-100"
-                  required
-                />
-              </label>
               <div className="flex items-end">
                 <button
                   type="submit"
@@ -617,6 +681,29 @@ export const LeadDetailView: React.FC = () => {
               </div>
             </form>
           )}
+        </div>
+
+        <div className="rounded-xl border border-zinc-800 bg-[#121214] p-5">
+          <h4 className="text-xs font-bold uppercase tracking-wider text-zinc-300">
+            Persisted Lead Timeline
+          </h4>
+          <div className="mt-3 max-h-80 space-y-2 overflow-y-auto">
+            {timeline.length === 0 ? (
+              <p className="text-xs text-zinc-500">No timeline events available.</p>
+            ) : (
+              timeline.map((event) => (
+                <div key={`${event.type}-${event.id}`} className="rounded-lg border border-zinc-800 bg-zinc-900 p-3 text-xs">
+                  <div className="flex justify-between gap-3">
+                    <span className="font-bold text-zinc-200">{event.title}</span>
+                    <span className="font-mono text-[9px] text-zinc-500">
+                      {new Date(event.occurred_at).toLocaleString()}
+                    </span>
+                  </div>
+                  <span className="mt-1 block text-[9px] uppercase text-indigo-400">{event.type}</span>
+                </div>
+              ))
+            )}
+          </div>
         </div>
 
       </div>

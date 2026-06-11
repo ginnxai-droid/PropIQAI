@@ -1,8 +1,10 @@
 import { Router } from "express";
 import type { AuthenticatedRequest } from "../auth";
 import { getRequestAuth } from "../auth";
+import type { AppConfig } from "../config";
 import { throwDatabaseError } from "../database";
 import { asyncHandler } from "../errors";
+import { refreshSlaState } from "../workflow/orchestrator";
 
 export const bootstrapRouter = Router();
 
@@ -42,6 +44,10 @@ bootstrapRouter.get(
   asyncHandler(async (request: AuthenticatedRequest, response) => {
     const auth = getRequestAuth(request);
     const organizationId = auth.organizationId;
+    await refreshSlaState(
+      request.app.locals.config as AppConfig,
+      organizationId,
+    );
 
     const [
       projectsResult,

@@ -1,6 +1,6 @@
 import React, { useState } from "react";
 import { useApp } from "../context/AppContext";
-import { Priority, LeadStatus } from "../types";
+import { LeadStatus } from "../types";
 import {
   User,
   Users,
@@ -11,7 +11,7 @@ import {
 } from "lucide-react";
 
 export const SlaAlertsView: React.FC = () => {
-  const { leads, projects, users, assignLead, setSelectedLeadId, setActivePage } = useApp();
+  const { leads, projects, users, slaEvents, assignLead, setSelectedLeadId, setActivePage } = useApp();
 
   const [overrideLeadId, setOverrideLeadId] = useState<string | null>(null);
 
@@ -22,36 +22,33 @@ export const SlaAlertsView: React.FC = () => {
     return new Date(l.sla_deadline).getTime() < Date.now();
   });
 
-  const getEscalationDetails = (dueAtStr: string) => {
-    const elapsedMinutes = Math.floor((Date.now() - new Date(dueAtStr).getTime()) / 60000);
-    
-    // Determine escalation levels (Level 1: <15m, Level 2: 15m-30m, Level 3: 30m-60m, Level 4: >60m)
-    if (elapsedMinutes < 15) {
+  const getEscalationDetails = (level: number) => {
+    if (level <= 1) {
       return {
         level: 1,
         title: "Level 1: Rep Warning",
-        desc: "Automated SMS buzzer dispatched to Sales Advisor's device queue.",
+        desc: "Persisted overdue state. External notification: Not available.",
         color: "bg-amber-500/10 text-amber-400 border border-amber-500/20"
       };
-    } else if (elapsedMinutes < 30) {
+    } else if (level === 2) {
       return {
         level: 2,
-        title: "Level 2: Manager Alerted",
-        desc: "Escalated to Priya Sharma (Senior Manager) for visual tracking review.",
+        title: "Level 2: Manager Review",
+        desc: "Visible to managers and owners in the persisted SLA queue.",
         color: "bg-orange-500/15 text-orange-400 border border-orange-500/30 font-bold"
       };
-    } else if (elapsedMinutes < 60) {
+    } else if (level === 3) {
       return {
         level: 3,
-        title: "Level 3: Auto-Reassignment",
-        desc: "System is re-calculating other advisors available for automatic swap routing.",
+        title: "Level 3: Intervention Required",
+        desc: "Manual reassignment is available; automatic reassignment is Not available.",
         color: "bg-rose-500/10 text-rose-450 border border-rose-500/20 font-bold"
       };
     } else {
       return {
         level: 4,
-        title: "Level 4: CXO Escalate",
-        desc: "Hot lead ignored over 1 hour. Pushed onto Developer Director SMS digest.",
+        title: "Level 4: Critical Review",
+        desc: "Persisted critical breach. External escalation delivery: Not available.",
         color: "bg-red-650/20 text-red-450 border border-red-500/30 font-black animate-pulse"
       };
     }
@@ -73,7 +70,7 @@ export const SlaAlertsView: React.FC = () => {
         <div>
           <h3 className="font-extrabold text-rose-400 text-sm">Active SLA Breach Resolution Center</h3>
           <p className="text-xs text-zinc-400 mt-1 max-w-2xl leading-relaxed">
-            PropIQ AI tracks reply speed. Ignored hot leads can be reassigned here immediately back into rotation. This reduces lost opportunities and boosts builder confidence.
+            Persisted SLA events are refreshed by the server and can be manually reassigned by authorized managers.
           </p>
         </div>
       </div>
@@ -86,7 +83,7 @@ export const SlaAlertsView: React.FC = () => {
             <Timer className="w-4 h-4 text-rose-520 animate-spin" />
             Active Processes Breaches ({breachedLeads.length})
           </span>
-          <span className="text-zinc-500 font-medium">Re-route to auto-fix and remove from queue alerts</span>
+          <span className="text-zinc-500 font-medium">Manual intervention queue</span>
         </div>
 
         <div className="overflow-x-auto">
@@ -107,14 +104,17 @@ export const SlaAlertsView: React.FC = () => {
                   <td colSpan={6} className="py-16 text-center text-zinc-500 font-semibold">
                     <CheckCircle className="w-12 h-12 text-emerald-500/20 mx-auto mb-2" />
                     <p className="text-zinc-200">No SLA alerts active! Rep operations are working cleanly.</p>
-                    <p className="text-zinc-500 text-[11px] mt-1 italic">All incoming meta and phone callback queues were processed inside target caps.</p>
+                    <p className="text-zinc-500 text-[11px] mt-1 italic">No persisted incomplete SLA event is currently overdue.</p>
                   </td>
                 </tr>
               ) : (
                 breachedLeads.map((lead) => {
                   const assignee = users.find(u => u.id === lead.assigned_to);
                   const proj = projects.find(p => p.id === lead.project_id);
-                  const esc = getEscalationDetails(lead.sla_deadline!);
+                  const slaEvent = slaEvents
+                    .filter((event) => event.lead_id === lead.id && !event.completed_at)
+                    .sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime())[0];
+                  const esc = getEscalationDetails(slaEvent?.escalation_level ?? 1);
                   const delayMins = Math.floor((Date.now() - new Date(lead.sla_deadline!).getTime()) / 60000);
 
                   return (

@@ -320,7 +320,7 @@ export const ProjectsView: React.FC = () => {
                 <div className="p-3 bg-zinc-900 border border-zinc-800 rounded-lg text-[11px] space-y-1.5 font-semibold text-zinc-350">
                   <span className="text-[9px] text-zinc-500 uppercase tracking-widest block font-mono font-bold flex items-center gap-1">
                     <HelpCircle className="w-3.5 h-3.5 text-zinc-550" />
-                    AI FAQ Context Rules (`faqs`):
+                    FAQ Context Rules (`faqs`):
                   </span>
                   <div>
                     <span className="block font-bold text-zinc-250">Q: {proj.faqs[0]?.question}</span>

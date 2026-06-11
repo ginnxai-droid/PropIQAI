@@ -3,8 +3,11 @@ import { Router } from "express";
 import type { AuthenticatedRequest } from "../auth";
 import { getRequestAuth } from "../auth";
 import { requirePermission } from "../authorization";
+import type { AppConfig } from "../config";
 import { throwDatabaseError, writeAuditLog } from "../database";
 import { ApiError, asyncHandler } from "../errors";
+import { createAdminSupabaseClient } from "../supabase";
+import { runLeadWorkflow } from "../workflow/orchestrator";
 import {
   assignmentSchema,
   conversationCreateSchema,
@@ -95,7 +98,15 @@ leadsRouter.post(
       action: "LEAD_CREATED",
       newValues: data,
     });
-    response.status(201).json({ data });
+    const workflow = await runLeadWorkflow(
+      request.app.locals.config as AppConfig,
+      {
+        organizationId: auth.organizationId,
+        leadId: data.id,
+        actorProfileId: auth.profileId,
+      },
+    );
+    response.status(201).json({ data: workflow.lead });
   }),
 );
 
@@ -123,7 +134,15 @@ leadsRouter.patch(
       oldValues: oldLead,
       newValues: data,
     });
-    response.json({ data });
+    const workflow = await runLeadWorkflow(
+      request.app.locals.config as AppConfig,
+      {
+        organizationId: auth.organizationId,
+        leadId: data.id,
+        actorProfileId: auth.profileId,
+      },
+    );
+    response.json({ data: workflow.lead });
   }),
 );
 
@@ -138,7 +157,15 @@ leadsRouter.post(
       target_profile_id: input.assigned_to,
     });
     throwDatabaseError(error, "The lead could not be assigned.");
-    response.json({ data });
+    const workflow = await runLeadWorkflow(
+      request.app.locals.config as AppConfig,
+      {
+        organizationId: auth.organizationId,
+        leadId: request.params.leadId!,
+        actorProfileId: auth.profileId,
+      },
+    );
+    response.json({ data: workflow.lead ?? data });
   }),
 );
 
@@ -216,6 +243,130 @@ leadsRouter.post(
       action: "CONVERSATION_CREATED",
       newValues: { lead_id: request.params.leadId, channel: input.channel },
     });
+    await runLeadWorkflow(request.app.locals.config as AppConfig, {
+      organizationId: auth.organizationId,
+      leadId: request.params.leadId!,
+      actorProfileId: auth.profileId,
+    });
     response.status(201).json({ data });
+  }),
+);
+
+leadsRouter.get(
+  "/:leadId/timeline",
+  asyncHandler(async (request: AuthenticatedRequest, response) => {
+    const auth = getRequestAuth(request);
+    requirePermission(auth.role, "leads:read");
+    const lead = await loadLead(request, request.params.leadId!);
+    const admin = createAdminSupabaseClient(
+      request.app.locals.config as AppConfig,
+    );
+    const organizationId = auth.organizationId;
+    const leadId = lead.id;
+    const [
+      conversations,
+      handoffs,
+      visits,
+      tasks,
+      slaEvents,
+      auditLogs,
+    ] = await Promise.all([
+      admin
+        .from("conversations")
+        .select("*")
+        .eq("organization_id", organizationId)
+        .eq("lead_id", leadId),
+      admin
+        .from("handoffs")
+        .select("*")
+        .eq("organization_id", organizationId)
+        .eq("lead_id", leadId),
+      admin
+        .from("site_visits")
+        .select("*")
+        .eq("organization_id", organizationId)
+        .eq("lead_id", leadId),
+      admin
+        .from("followup_tasks")
+        .select("*")
+        .eq("organization_id", organizationId)
+        .eq("lead_id", leadId),
+      admin
+        .from("sla_events")
+        .select("*")
+        .eq("organization_id", organizationId)
+        .eq("lead_id", leadId),
+      admin
+        .from("audit_logs")
+        .select("*")
+        .eq("organization_id", organizationId)
+        .eq("entity_id", leadId),
+    ]);
+    for (const result of [
+      conversations,
+      handoffs,
+      visits,
+      tasks,
+      slaEvents,
+      auditLogs,
+    ]) {
+      throwDatabaseError(result.error, "The lead timeline could not be loaded.");
+    }
+    const events = [
+      {
+        id: `lead-${lead.id}`,
+        type: "LEAD_CREATED",
+        occurred_at: lead.created_at,
+        title: "Lead created",
+        data: lead,
+      },
+      ...(conversations.data ?? []).map((row) => ({
+        id: row.id,
+        type: "CONVERSATION",
+        occurred_at: row.created_at,
+        title: `Conversation added (${row.channel})`,
+        data: row,
+      })),
+      ...(handoffs.data ?? []).map((row) => ({
+        id: row.id,
+        type: "HANDOFF",
+        occurred_at: row.created_at,
+        title: `Handoff: ${row.reason}`,
+        data: row,
+      })),
+      ...(visits.data ?? []).map((row) => ({
+        id: row.id,
+        type: "SITE_VISIT",
+        occurred_at: row.created_at,
+        title: `Site visit: ${row.status}`,
+        data: row,
+      })),
+      ...(tasks.data ?? []).map((row) => ({
+        id: row.id,
+        type: "TASK",
+        occurred_at: row.created_at,
+        title: `Task: ${row.task_type}`,
+        data: row,
+      })),
+      ...(slaEvents.data ?? []).map((row) => ({
+        id: row.id,
+        type: "SLA",
+        occurred_at: row.created_at,
+        title: `SLA: ${row.event_type}`,
+        data: row,
+      })),
+      ...(auditLogs.data ?? []).map((row) => ({
+        id: row.id,
+        type: "AUDIT",
+        occurred_at: row.created_at,
+        title: row.action,
+        data: row,
+      })),
+    ].sort(
+      (left, right) =>
+        new Date(left.occurred_at).getTime() -
+        new Date(right.occurred_at).getTime(),
+    );
+    response.json({ data: events });
   }),
 );

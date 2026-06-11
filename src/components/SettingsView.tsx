@@ -36,7 +36,7 @@ export const SettingsView: React.FC = () => {
           <Webhook className="w-5 h-5 text-amber-400" />
           <h4 className="mt-3 text-sm font-bold">External intake</h4>
           <p className="mt-1 text-xs text-zinc-400">
-            Not yet available. Webhook and n8n integrations remain outside
+            Not available. Webhook and n8n integrations remain outside
             Stage 1 scope.
           </p>
         </div>

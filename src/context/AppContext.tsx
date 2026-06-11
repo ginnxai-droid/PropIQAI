@@ -27,7 +27,16 @@ import { apiRequest } from "../lib/api";
 
 type NewLeadInput = Omit<
   Lead,
-  "id" | "created_at" | "updated_at" | "priority"
+  | "id"
+  | "created_at"
+  | "updated_at"
+  | "score"
+  | "priority"
+  | "score_components"
+  | "scoring_version"
+  | "score_explanation"
+  | "recalculated_at"
+  | "sla_deadline"
 >;
 
 interface AppContextType {
@@ -62,8 +71,9 @@ interface AppContextType {
         | "budget_max"
         | "purchase_timeline"
         | "site_visit_interest"
-        | "score"
-        | "priority"
+        | "engagement_quality"
+        | "callback_responsiveness"
+        | "handoff_signals"
         | "recommended_next_action"
       >
     >,
@@ -104,8 +114,6 @@ interface AppContextType {
     lead_id: string;
     assigned_to: string;
     reason: HandoffReason;
-    priority: Priority;
-    sla_deadline: string;
   }) => Promise<void>;
   addUser: (user: User) => Promise<void>;
   addConversationMessage: (
@@ -273,21 +281,10 @@ export function AppProvider({ children }: { children: ReactNode }) {
 
   const addLead = useCallback(
     async (leadData: NewLeadInput) => {
-      const score = Number(leadData.score || 7.5);
-      const priority =
-        score >= 8
-          ? Priority.HOT
-          : score >= 6
-            ? Priority.WARM
-            : score >= 4
-              ? Priority.NURTURE
-              : Priority.COLD;
       const response = await apiRequest<{ data: { id: string } }>("/api/leads", {
         method: "POST",
         body: JSON.stringify({
           ...leadData,
-          score,
-          priority,
           is_after_hours: leadData.isAfterHours ?? false,
           isAfterHours: undefined,
           email: leadData.email || null,
@@ -322,8 +319,9 @@ export function AppProvider({ children }: { children: ReactNode }) {
           | "budget_max"
           | "purchase_timeline"
           | "site_visit_interest"
-          | "score"
-          | "priority"
+          | "engagement_quality"
+          | "callback_responsiveness"
+          | "handoff_signals"
           | "recommended_next_action"
         >
       >,
@@ -460,8 +458,6 @@ export function AppProvider({ children }: { children: ReactNode }) {
       lead_id: string;
       assigned_to: string;
       reason: HandoffReason;
-      priority: Priority;
-      sla_deadline: string;
     }) => {
       await apiRequest("/api/handoffs", {
         method: "POST",

@@ -53,6 +53,28 @@ export enum Priority {
   COLD = "COLD",
 }
 
+export type EngagementQuality = "HIGH" | "MEDIUM" | "LOW" | "UNKNOWN";
+export type CallbackResponsiveness =
+  | "RESPONSIVE"
+  | "DELAYED"
+  | "UNRESPONSIVE"
+  | "UNKNOWN";
+
+export interface HandoffSignals {
+  price_negotiation?: boolean;
+  booking_request?: boolean;
+  compliance_question?: boolean;
+  angry_or_confused?: boolean;
+  human_requested?: boolean;
+  serious_competitor_comparison?: boolean;
+}
+
+export interface ScoreComponent {
+  normalized: number;
+  weight: number;
+  contribution: number;
+}
+
 export enum Channel {
   CALL = "CALL",
   WHATSAPP = "WHATSAPP",
@@ -132,8 +154,15 @@ export interface Lead {
   budget_max: number; // in INR
   purchase_timeline: PurchaseTimeline;
   site_visit_interest: boolean;
+  engagement_quality: EngagementQuality;
+  callback_responsiveness: CallbackResponsiveness;
+  handoff_signals: HandoffSignals;
   score: number; // 1 to 10
   priority: Priority;
+  score_components: Record<string, ScoreComponent>;
+  scoring_version: string;
+  score_explanation: string;
+  recalculated_at?: string;
   assigned_to?: string; // User ID
   sla_deadline?: string; // ISO date string
   first_response_at?: string;
@@ -168,6 +197,7 @@ export interface Handoff {
   priority: Priority;
   sla_deadline: string;
   status: "PENDING" | "CONTACTED" | "ESCALATED" | "RESOLVED";
+  escalation_level: number;
   escalated_to?: string; // User ID (Manager)
   completed_at?: string;
   created_at: string;
@@ -212,6 +242,15 @@ export interface FollowupTask {
   due_at: string;
   status: "PENDING" | "COMPLETED" | "OVERDUE" | "CANCELLED";
   notes?: string;
+  site_visit_id?: string;
   created_at: string;
   updated_at: string;
+}
+
+export interface TimelineEvent {
+  id: string;
+  type: "LEAD_CREATED" | "CONVERSATION" | "HANDOFF" | "SITE_VISIT" | "TASK" | "SLA" | "AUDIT";
+  occurred_at: string;
+  title: string;
+  data: Record<string, unknown>;
 }

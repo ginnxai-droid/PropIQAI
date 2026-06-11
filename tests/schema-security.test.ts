@@ -149,16 +149,16 @@ describe("database security definition", () => {
     expect(dashboardView).not.toContain("+15% vs wk");
     expect(dashboardView).not.toContain("AI Qualified");
     expect(dashboardView).not.toContain("Voice Recoveries");
-    expect(pilotReportView).toContain("Not yet available");
+    expect(pilotReportView).toContain("Not available");
     expect(pilotReportView).toContain(
-      "calculated only from persisted Stage 1 records",
+      "calculated only from persisted Stage 2 workflow records",
     );
   });
 
   it("keeps Stage 1 settings and webhook configuration read-only", () => {
     expect(settingsView).not.toMatch(/<(input|select|textarea|form)\b/);
     expect(settingsView).not.toContain("<button");
-    expect(settingsView).toContain("Not yet available");
+    expect(settingsView).toContain("Not available");
     expect(serverApp).not.toContain('app.use("/api/settings"');
     expect(serverApp).not.toContain('app.use("/api/webhooks"');
   });
