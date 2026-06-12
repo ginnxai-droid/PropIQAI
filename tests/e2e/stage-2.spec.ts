@@ -33,12 +33,9 @@ test("owner-to-manager-to-executive revenue recovery workflow", async ({
   await ownerPage
     .getByLabel("Email", { exact: true })
     .fill(`stage-two-e2e-${marker}@example.test`);
-  await ownerPage
-    .locator("form", {
-      has: ownerPage.getByRole("button", { name: "Create Lead" }),
-    })
-    .locator("select")
-    .selectOption({ label: "PropIQ Heights" });
+  await ownerPage.locator('select[name="project_id"]').selectOption({
+    label: "PropIQ Heights",
+  });
   await ownerPage.getByRole("button", { name: "Create Lead" }).click();
   await expect(ownerPage.getByText(leadName, { exact: true })).toBeVisible();
 

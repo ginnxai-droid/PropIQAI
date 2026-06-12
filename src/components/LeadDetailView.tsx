@@ -48,6 +48,7 @@ export const LeadDetailView: React.FC = () => {
 
   const [manualText, setManualText] = useState("");
   const [timeline, setTimeline] = useState<TimelineEvent[]>([]);
+  const [actionMessage, setActionMessage] = useState<string | null>(null);
 
   useEffect(() => {
     if (!selectedLeadId) {
@@ -96,6 +97,9 @@ export const LeadDetailView: React.FC = () => {
       event.lead_id === lead.id || event.duplicate_of_lead_id === lead.id,
   );
   const latestIntake = leadIntakes[0];
+  const hasDuplicateIntake = leadIntakes.some(
+    (event) => event.processing_status === "DUPLICATE",
+  );
 
   const formatCurrency = (val: number) => {
     if (val >= 10000000) {
@@ -106,24 +110,34 @@ export const LeadDetailView: React.FC = () => {
 
   const isSlaBreached = lead.sla_deadline && new Date(lead.sla_deadline).getTime() < Date.now();
 
+  const runAction = async (message: string, action: () => Promise<void>) => {
+    setActionMessage(null);
+    await action();
+    setActionMessage(message);
+  };
+
   const handleSendMessage = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!manualText.trim()) return;
 
     // Send message to visual transcript
-    await addConversationMessage(lead.id, "human", manualText);
+    await runAction("Conversation entry saved.", () =>
+      addConversationMessage(lead.id, "human", manualText),
+    );
     setManualText("");
 
     // Automatically transition to CONTACTED if logging manual action
     if (lead.status === LeadStatus.NEW) {
-      await updateLeadStatus(lead.id, LeadStatus.CONTACTED);
+      await runAction("Conversation saved and lead marked contacted.", () =>
+        updateLeadStatus(lead.id, LeadStatus.CONTACTED),
+      );
     }
   };
 
   const handleQualificationUpdate = async (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     const values = new FormData(event.currentTarget);
-    await updateLead(lead.id, {
+    await runAction("Qualification saved and deterministic score recalculated.", () => updateLead(lead.id, {
       buyer_type: values.get("buyer_type") as BuyerType,
       apartment_preference: String(values.get("apartment_preference") ?? ""),
       budget_min: Number(values.get("budget_min")),
@@ -146,21 +160,29 @@ export const LeadDetailView: React.FC = () => {
       recommended_next_action: String(
         values.get("recommended_next_action") ?? "",
       ),
-    });
+    }));
   };
 
   const handleHandoffCreate = async (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     const values = new FormData(event.currentTarget);
-    await createHandoff({
+    await runAction("Handoff and SLA workflow updated.", () => createHandoff({
       lead_id: lead.id,
       assigned_to: String(values.get("assigned_to")),
       reason: values.get("reason") as HandoffReason,
-    });
+    }));
   };
 
   return (
     <div className="grid grid-cols-1 xl:grid-cols-3 gap-6 select-none max-w-[1600px] mx-auto">
+      {actionMessage && (
+        <div
+          role="status"
+          className="xl:col-span-3 rounded-lg border border-emerald-500/25 bg-emerald-500/10 px-4 py-3 text-xs text-emerald-200"
+        >
+          {actionMessage}
+        </div>
+      )}
       
       {/* COLUMN 1: Profile Details */}
       <div className="space-y-6 xl:col-span-1">
@@ -263,6 +285,16 @@ export const LeadDetailView: React.FC = () => {
                 ? new Date(lead.received_at).toLocaleString()
                 : "Not available"}
             </span>
+            <span>Preferred location</span>
+            <span className="text-right font-bold text-zinc-200">
+              {lead.preferred_location ?? "Not available"}
+            </span>
+            <span>Duplicate state</span>
+            <span className="text-right font-bold text-zinc-200">
+              {lead.is_duplicate || hasDuplicateIntake
+                ? "Duplicate intake detected"
+                : "No duplicate detected"}
+            </span>
             <span>AI confidence</span>
             <span className="text-right font-bold text-zinc-200">
               {lead.ai_confidence === undefined || lead.ai_confidence === null
@@ -270,6 +302,13 @@ export const LeadDetailView: React.FC = () => {
                 : `${Math.round(lead.ai_confidence * 100)}%`}
             </span>
           </div>
+          {lead.ai_qualification_status === "NOT_AVAILABLE" && (
+            <p className="mt-3 rounded-lg border border-amber-500/20 bg-amber-500/10 p-3 text-amber-200">
+              AI provider is not available. Intake metadata and validated manual
+              qualification signals remain persisted and the deterministic
+              Stage 2 workflow still runs.
+            </p>
+          )}
           <div className="mt-3 flex flex-wrap gap-1.5">
             {Object.entries(lead.ai_signals ?? {})
               .filter(([, value]) => value === true)
@@ -485,7 +524,11 @@ export const LeadDetailView: React.FC = () => {
           <div className="grid grid-cols-2 gap-2 text-xs">
             {/* Status updates */}
             <button
-              onClick={() => void updateLeadStatus(lead.id, LeadStatus.QUALIFIED)}
+              onClick={() =>
+                void runAction("Lead marked qualified.", () =>
+                  updateLeadStatus(lead.id, LeadStatus.QUALIFIED),
+                )
+              }
               className={`p-2 border rounded-lg font-bold transition-all cursor-pointer ${
                 lead.status === LeadStatus.QUALIFIED
                   ? "bg-emerald-500/15 border-emerald-500/50 text-emerald-400"
@@ -495,7 +538,11 @@ export const LeadDetailView: React.FC = () => {
               Mark Qualified
             </button>
             <button
-              onClick={() => void updateLeadStatus(lead.id, LeadStatus.CONTACTED)}
+              onClick={() =>
+                void runAction("Lead marked contacted.", () =>
+                  updateLeadStatus(lead.id, LeadStatus.CONTACTED),
+                )
+              }
               className={`p-2 border rounded-lg font-bold transition-all cursor-pointer ${
                 lead.status === LeadStatus.CONTACTED
                   ? "bg-indigo-500/15 border-indigo-505/50 text-indigo-400"
@@ -508,13 +555,21 @@ export const LeadDetailView: React.FC = () => {
 
           <div className="grid grid-cols-2 gap-2 text-xs">
             <button
-              onClick={() => void updateLeadStatus(lead.id, LeadStatus.BOOKED)}
+              onClick={() =>
+                void runAction("Lead marked booked.", () =>
+                  updateLeadStatus(lead.id, LeadStatus.BOOKED),
+                )
+              }
               className="p-2 border border-emerald-500/30 hover:bg-emerald-600/20 hover:text-emerald-400 rounded-lg font-bold transition-all cursor-pointer bg-emerald-500/10 text-emerald-500"
             >
               ★ Mark Booked
             </button>
             <button
-              onClick={() => void updateLeadStatus(lead.id, LeadStatus.LOST)}
+              onClick={() =>
+                void runAction("Lead moved to lost.", () =>
+                  updateLeadStatus(lead.id, LeadStatus.LOST),
+                )
+              }
               className="p-2 border border-rose-500/30 hover:bg-rose-600/20 hover:text-rose-450 rounded-lg font-bold transition-all cursor-pointer bg-rose-500/10 text-rose-500"
             >
               ✗ Move to Lost
@@ -747,6 +802,12 @@ export const LeadDetailView: React.FC = () => {
                 </button>
               </div>
             </form>
+          )}
+          {!canCreateHandoff && (
+            <p className="border-t border-zinc-800 pt-3 text-xs text-amber-300">
+              Create Handoff is unavailable for the Executive role. Ask an
+              Owner, Admin, or Manager to create or update the handoff.
+            </p>
           )}
         </div>
 

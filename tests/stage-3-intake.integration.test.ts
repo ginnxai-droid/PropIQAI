@@ -32,6 +32,9 @@ describe.skipIf(!shouldRun)("Stage 3 external intake and AI qualification", () =
     NODE_ENV: "test",
   };
   const app = createApp({ config });
+  const unavailableApp = createApp({
+    config: { ...config, AI_QUALIFICATION_MODE: "unavailable" },
+  });
   const marker = Date.now().toString();
   const campaign = `stage-3-${marker}`;
   const createdLeadIds: string[] = [];
@@ -262,6 +265,46 @@ describe.skipIf(!shouldRun)("Stage 3 external intake and AI qualification", () =
       .single();
     expect(duplicateEvent.error).toBeNull();
     expect(duplicateEvent.data?.existing_lead_id).toBe(primaryLeadId);
+  });
+
+  it("uses validated manual signals when AI is unavailable", async () => {
+    const unavailableMarker = `${marker}8`;
+    const response = await request(unavailableApp)
+      .post("/api/intake/manual")
+      .set("Authorization", `Bearer ${ownerToken}`)
+      .send({
+        buyer_name: `Manual Fallback Buyer ${unavailableMarker}`,
+        phone: `+9188${unavailableMarker.slice(-8)}`,
+        email: `manual-fallback-${unavailableMarker}@example.test`,
+        project_id: projectId,
+        budget_min: 12_000_000,
+        budget_max: 15_000_000,
+        purchase_timeline: "IMMEDIATE",
+        preferred_location: "Pune",
+        message: "Manual reviewer captured qualification details.",
+        source: "MANUAL",
+        channel: "MANUAL_UI",
+        site_visit_request: true,
+        negotiation_intent: true,
+        human_requested: true,
+      });
+    expect(response.status).toBe(201);
+    createdLeadIds.push(response.body.data.lead.id);
+    intakeEventIds.push(response.body.data.intakeEventId);
+    expect(response.body.data.lead).toMatchObject({
+      ai_qualification_status: "NOT_AVAILABLE",
+      budget_min: 12_000_000,
+      budget_max: 15_000_000,
+      purchase_timeline: "IMMEDIATE",
+      preferred_location: "Pune",
+      site_visit_interest: true,
+      priority: "HOT",
+      handoff_signals: {
+        price_negotiation: true,
+        human_requested: true,
+      },
+    });
+    expect(response.body.data.lead.score).toBeGreaterThanOrEqual(8);
   });
 
   it("does not leak or match a duplicate from another organization", async () => {

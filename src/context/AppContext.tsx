@@ -15,6 +15,8 @@ import {
   Role,
   SiteVisitStatus,
   type Conversation,
+  type ExternalIntakeInput,
+  type ExternalIntakeResult,
   type FollowupTask,
   type Handoff,
   type IntakeEvent,
@@ -74,6 +76,9 @@ interface AppContextType {
   setSelectedLeadId: (id: string | null) => void;
   refresh: () => Promise<void>;
   addLead: (lead: NewLeadInput) => Promise<string>;
+  addExternalIntake: (
+    input: ExternalIntakeInput,
+  ) => Promise<ExternalIntakeResult>;
   updateLead: (
     leadId: string,
     changes: Partial<
@@ -532,6 +537,21 @@ export function AppProvider({ children }: { children: ReactNode }) {
     [refresh],
   );
 
+  const addExternalIntake = useCallback(
+    async (input: ExternalIntakeInput) => {
+      const response = await apiRequest<{ data: ExternalIntakeResult }>(
+        "/api/intake/manual",
+        {
+          method: "POST",
+          body: JSON.stringify(input),
+        },
+      );
+      await refresh();
+      return response.data;
+    },
+    [refresh],
+  );
+
   const updateAlertStatus = useCallback(
     async (
       alertId: string,
@@ -570,6 +590,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
       setSelectedLeadId,
       refresh,
       addLead,
+      addExternalIntake,
       updateLead,
       updateLeadStatus,
       assignLead,
@@ -591,6 +612,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
       alerts,
       addConversationMessage,
       addLead,
+      addExternalIntake,
       addProject,
       addTask,
       addUser,

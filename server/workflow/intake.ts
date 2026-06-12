@@ -210,8 +210,18 @@ export async function processExternalLeadIntake(
     project_interest: input.project_interest ?? project.name,
     budget_text: input.budget_text ?? null,
     budget_amount: input.budget_amount ?? null,
+    budget_min: input.budget_min ?? null,
+    budget_max: input.budget_max ?? null,
+    purchase_timeline: input.purchase_timeline ?? null,
     preferred_location: input.preferred_location ?? null,
     message: input.message ?? null,
+    site_visit_request: input.site_visit_request ?? false,
+    negotiation_intent: input.negotiation_intent ?? false,
+    booking_intent: input.booking_intent ?? false,
+    compliance_question: input.compliance_question ?? false,
+    human_requested: input.human_requested ?? false,
+    angry_or_confused: input.angry_or_confused ?? false,
+    competitor_comparison: input.competitor_comparison ?? false,
     source,
     campaign: input.campaign ?? null,
     received_at: receivedAtIso,
@@ -344,7 +354,42 @@ export async function processExternalLeadIntake(
         key_questions: [],
         objections: [],
       };
-  const budgetAmount = input.budget_amount ?? 0;
+  const explicitSignals = {
+    price_negotiation: input.negotiation_intent ?? false,
+    booking_request: input.booking_intent ?? false,
+    compliance_question: input.compliance_question ?? false,
+    angry_or_confused: input.angry_or_confused ?? false,
+    human_requested: input.human_requested ?? false,
+    serious_competitor_comparison: input.competitor_comparison ?? false,
+  };
+  const hasExplicitHighIntent =
+    Boolean(input.site_visit_request) ||
+    Object.values(explicitSignals).some(Boolean);
+  const budgetFallback = input.budget_amount ?? 0;
+  const budgetMin =
+    input.budget_min ??
+    (ai.status === "COMPLETED" ? aiUpdate.budget_min : budgetFallback);
+  const budgetMax =
+    input.budget_max ??
+    (ai.status === "COMPLETED" ? aiUpdate.budget_max : budgetMin);
+  const purchaseTimeline =
+    input.purchase_timeline ??
+    (ai.status === "COMPLETED" ? aiUpdate.purchase_timeline : "UNKNOWN");
+  const handoffSignals = {
+    ...(ai.status === "COMPLETED" ? aiUpdate.handoff_signals : {}),
+    ...Object.fromEntries(
+      Object.entries(explicitSignals).map(([key, value]) => [
+        key,
+        value ||
+          Boolean(
+            ai.status === "COMPLETED" &&
+              aiUpdate.handoff_signals[
+                key as keyof typeof aiUpdate.handoff_signals
+              ],
+          ),
+      ]),
+    ),
+  };
   const assignedTo = await eligibleAssignee(
     admin,
     context.organizationId,
@@ -362,21 +407,27 @@ export async function processExternalLeadIntake(
       email,
       source,
       status: "NEW",
-      buyer_type: ai.status === "COMPLETED" ? aiUpdate.buyer_type : "UNKNOWN",
+      buyer_type:
+        input.competitor_comparison
+          ? "COMPARISON_SHOPPER"
+          : ai.status === "COMPLETED"
+            ? aiUpdate.buyer_type
+            : "UNKNOWN",
       apartment_preference: "",
-      budget_min:
-        ai.status === "COMPLETED" ? aiUpdate.budget_min : budgetAmount,
-      budget_max:
-        ai.status === "COMPLETED" ? aiUpdate.budget_max : budgetAmount,
-      purchase_timeline:
-        ai.status === "COMPLETED" ? aiUpdate.purchase_timeline : "UNKNOWN",
+      budget_min: budgetMin,
+      budget_max: budgetMax,
+      purchase_timeline: purchaseTimeline,
       site_visit_interest:
-        ai.status === "COMPLETED" ? aiUpdate.site_visit_interest : false,
+        Boolean(input.site_visit_request) ||
+        (ai.status === "COMPLETED" && aiUpdate.site_visit_interest),
       engagement_quality:
-        ai.status === "COMPLETED" ? aiUpdate.engagement_quality : "UNKNOWN",
+        hasExplicitHighIntent
+          ? "HIGH"
+          : ai.status === "COMPLETED"
+            ? aiUpdate.engagement_quality
+            : "UNKNOWN",
       callback_responsiveness: "UNKNOWN",
-      handoff_signals:
-        ai.status === "COMPLETED" ? aiUpdate.handoff_signals : {},
+      handoff_signals: handoffSignals,
       assigned_to: assignedTo,
       ai_summary: aiUpdate.ai_summary,
       key_questions: aiUpdate.key_questions,

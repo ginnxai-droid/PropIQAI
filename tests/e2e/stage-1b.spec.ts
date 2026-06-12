@@ -43,7 +43,9 @@ test("valid roles use database authorization, refresh sessions, and log out", as
     if (account.role === "EXECUTIVE") {
       await expect(page.getByRole("button", { name: /^Edit / })).toHaveCount(0);
       await page.getByRole("button", { name: "Settings & Webhook" }).click();
-      await expect(page.getByText("Not available. Webhook")).toBeVisible();
+      await expect(
+        page.getByText(/Stage 3 website, manual UI, and authenticated webhook intake/),
+      ).toBeVisible();
       await expect(page.locator("main input, main select, main textarea")).toHaveCount(
         0,
       );
@@ -106,14 +108,13 @@ test("project and lead workflow persists across reload and a new session", async
   await page.getByRole("button", { name: "Lead Inbox" }).click();
   await page.getByRole("button", { name: "Add Lead" }).click();
   await page.getByLabel("Buyer name").fill(leadName);
-  await page.getByLabel("Phone", { exact: true }).fill("+919876543210");
-  await page.getByLabel("Email", { exact: true }).fill(`closure-${marker}@example.test`);
   await page
-    .locator("form", {
-      has: page.getByRole("button", { name: "Create Lead" }),
-    })
-    .locator("select")
-    .selectOption({ label: updatedProjectName });
+    .getByLabel("Phone", { exact: true })
+    .fill(`+9193${marker.slice(-8)}`);
+  await page.getByLabel("Email", { exact: true }).fill(`closure-${marker}@example.test`);
+  await page.locator('select[name="project_id"]').selectOption({
+    label: updatedProjectName,
+  });
   await page.getByRole("button", { name: "Create Lead" }).click();
   await expect(page.getByText(leadName, { exact: true })).toBeVisible();
 

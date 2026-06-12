@@ -24,7 +24,6 @@ test.beforeAll(() => {
 
 test("external intake appears with AI signals, deterministic workflow, alerts, and metrics", async ({
   page,
-  request,
 }) => {
   test.setTimeout(240_000);
   const marker = Date.now().toString();
@@ -32,14 +31,6 @@ test("external intake appears with AI signals, deterministic workflow, alerts, a
   const admin = createClient(supabaseUrl, serviceRoleKey, {
     auth: { autoRefreshToken: false, persistSession: false },
   });
-  const user = createClient(supabaseUrl, anonKey, {
-    auth: { autoRefreshToken: false, persistSession: false },
-  });
-  const login = await user.auth.signInWithPassword({
-    email: "owner@propiq.local",
-    password,
-  });
-  expect(login.error).toBeNull();
   const organization = await admin
     .from("organizations")
     .select("id")
@@ -56,41 +47,50 @@ test("external intake appears with AI signals, deterministic workflow, alerts, a
   let leadId = "";
   let intakeEventId = "";
   try {
-    const intake = await request.post("http://127.0.0.1:3001/api/intake/manual", {
-      headers: {
-        Authorization: `Bearer ${login.data.session!.access_token}`,
-      },
-      data: {
-        buyer_name: leadName,
-        phone: `+9198${marker.slice(-8)}`,
-        email: `stage-three-e2e-${marker}@example.test`,
-        project_id: project.data!.id,
-        budget_text: "1.2 to 1.5 crore",
-        preferred_location: "Pune",
-        message:
-          "Urgent site visit. Call me to negotiate price and explain RERA possession.",
-        source: "WEBSITE",
-        campaign: `stage-3-e2e-${marker}`,
-        received_at: "2026-06-14T06:30:00.000Z",
-      },
-    });
+    await signIn(page, "owner@propiq.local");
+    await page.getByRole("button", { name: "Lead Inbox" }).click();
+    await page.getByRole("button", { name: "Add Lead" }).click();
+    await expect(page.getByText("Stage 3 Manual Intake")).toBeVisible();
+    await page.getByLabel("Buyer name").fill(leadName);
+    await page.getByLabel("Phone", { exact: true }).fill(`+9198${marker.slice(-8)}`);
+    await page
+      .getByLabel("Email", { exact: true })
+      .fill(`stage-three-e2e-${marker}@example.test`);
+    await page.locator('select[name="project_id"]').selectOption(project.data!.id);
+    await page.getByLabel("Budget minimum (INR)").fill("12000000");
+    await page.getByLabel("Budget maximum (INR)").fill("15000000");
+    await page.getByLabel("Budget description").fill("1.2 to 1.5 crore");
+    await page.getByLabel("Purchase timeline").selectOption("IMMEDIATE");
+    await page.getByLabel("Source").selectOption("WEBSITE");
+    await page.getByLabel("Channel").selectOption("WEBSITE_FORM");
+    await page.getByLabel("Campaign").fill(`stage-3-e2e-${marker}`);
+    await page.getByLabel("Received time").fill("2026-06-14T12:00");
+    await page.getByLabel("Preferred location").fill("Pune");
+    await page
+      .getByLabel("Enquiry message")
+      .fill("Urgent site visit. Call me to negotiate price and explain RERA possession.");
+    await page.getByLabel("Site visit request").check();
+    await page.getByLabel("Negotiation intent").check();
+    await page.getByLabel("Legal or RERA question").check();
+    await page.getByLabel("Human requested").check();
+
+    const intakeResponsePromise = page.waitForResponse(
+      (response) =>
+        response.url().endsWith("/api/intake/manual") &&
+        response.request().method() === "POST",
+    );
+    await page.getByRole("button", { name: "Create Lead" }).click();
+    const intake = await intakeResponsePromise;
     expect(intake.status()).toBe(201);
     const intakeBody = await intake.json();
     leadId = intakeBody.data.lead.id;
     intakeEventId = intakeBody.data.intakeEventId;
 
-    await signIn(page, "owner@propiq.local");
-    await page.getByRole("button", { name: "Lead Inbox" }).click();
-    await page
-      .getByPlaceholder(/Search leads by buyer name/)
-      .fill(leadName);
-    const row = page.getByRole("row", { name: new RegExp(leadName) });
-    await expect(row).toBeVisible();
-    await expect(row).toContainText("AI COMPLETED");
-    await expect(row).toContainText("AfterHrs");
-    await row.click();
-
     await expect(page.getByText("External Intake And AI")).toBeVisible();
+    await expect(page.getByText("WEBSITE_FORM", { exact: true })).toBeVisible();
+    await expect(page.getByText(`stage-3-e2e-${marker}`, { exact: true })).toBeVisible();
+    await expect(page.getByText("Pune", { exact: true })).toBeVisible();
+    await expect(page.getByText("No duplicate detected")).toBeVisible();
     await expect(page.getByText("COMPLETED", { exact: true }).first()).toBeVisible();
     await expect(page.getByText("SITE VISIT REQUEST")).toBeVisible();
     await expect(page.getByText("NEGOTIATION INTENT")).toBeVisible();
@@ -100,8 +100,35 @@ test("external intake appears with AI signals, deterministic workflow, alerts, a
     await expect(page.getByText(/Human Takeover Timer SLA/)).toBeVisible();
     await expect(page.getByText(/External intake received/)).toBeVisible();
 
+    await page.getByRole("button", { name: "Save Qualification" }).click();
+    await expect(
+      page.getByRole("status").getByText(/Qualification saved/),
+    ).toBeVisible();
+
+    await page.getByRole("button", { name: /Handoff/ }).click();
+    await expect(
+      page.getByRole("status").getByText(/Handoff and SLA workflow updated/),
+    ).toBeVisible();
+
+    for (const [button, message] of [
+      ["Mark Qualified", "Lead marked qualified."],
+      ["Mark Contacted", "Lead marked contacted."],
+      ["Mark Booked", "Lead marked booked."],
+      ["Move to Lost", "Lead moved to lost."],
+    ] as const) {
+      await page.getByRole("button", { name: new RegExp(button) }).click();
+      await expect(page.getByRole("status")).toContainText(message);
+    }
+
     await page.getByRole("button", { name: "Internal Alerts" }).click();
     await expect(page.getByText("AFTER HOURS HIGH INTENT")).toBeVisible();
+    await page.getByRole("button", { name: "SLA Alerts" }).click();
+    await expect(page.getByText("Active SLA Breach Resolution Center")).toBeVisible();
+    await page.getByRole("button", { name: "Settings & Webhook" }).click();
+    await expect(page.getByText("Secure Foundation Settings")).toBeVisible();
+    await expect(
+      page.getByText(/Stage 3 website, manual UI, and authenticated webhook intake/),
+    ).toBeVisible();
     await page.getByRole("button", { name: "Dashboard" }).click();
     await expect(page.getByText("External Intake", { exact: true })).toBeVisible();
     await expect(page.getByText("HOT Intake", { exact: true })).toBeVisible();

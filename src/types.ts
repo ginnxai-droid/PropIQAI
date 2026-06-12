@@ -187,6 +187,38 @@ export interface Lead {
   duplicate_of_lead_id?: string;
 }
 
+export interface ExternalIntakeInput {
+  buyer_name: string;
+  phone: string;
+  email?: string;
+  project_id: string;
+  budget_text?: string;
+  budget_min?: number;
+  budget_max?: number;
+  purchase_timeline?: PurchaseTimeline;
+  preferred_location?: string;
+  message?: string;
+  source?: LeadSource;
+  campaign?: string;
+  received_at?: string;
+  channel?: string;
+  site_visit_request?: boolean;
+  negotiation_intent?: boolean;
+  booking_intent?: boolean;
+  compliance_question?: boolean;
+  human_requested?: boolean;
+  angry_or_confused?: boolean;
+  competitor_comparison?: boolean;
+}
+
+export interface ExternalIntakeResult {
+  outcome: "CREATED" | "DUPLICATE";
+  lead: Lead;
+  intakeEventId: string;
+  duplicateReasons?: string[];
+  aiStatus?: Lead["ai_qualification_status"];
+}
+
 export interface Conversation {
   id: string;
   lead_id: string;

@@ -265,6 +265,18 @@ export const externalLeadIntakeSchema = z.object({
   project_id: uuid.optional(),
   budget_text: z.string().trim().max(500).nullable().optional(),
   budget_amount: z.coerce.number().int().nonnegative().nullable().optional(),
+  budget_min: z.coerce.number().int().nonnegative().nullable().optional(),
+  budget_max: z.coerce.number().int().nonnegative().nullable().optional(),
+  purchase_timeline: z
+    .enum([
+      "IMMEDIATE",
+      "WITHIN_3_MONTHS",
+      "THREE_TO_SIX_MONTHS",
+      "SIX_TO_TWELVE_MONTHS",
+      "LONG_TERM",
+      "UNKNOWN",
+    ])
+    .optional(),
   preferred_location: z.string().trim().max(240).nullable().optional(),
   message: z.string().trim().max(10000).nullable().optional(),
   source: z
@@ -284,7 +296,28 @@ export const externalLeadIntakeSchema = z.object({
   received_at: z.iso.datetime().optional(),
   channel: z.string().trim().min(2).max(80).optional(),
   provider: z.string().trim().min(2).max(80).optional(),
+  site_visit_request: z.boolean().optional(),
+  negotiation_intent: z.boolean().optional(),
+  booking_intent: z.boolean().optional(),
+  compliance_question: z.boolean().optional(),
+  human_requested: z.boolean().optional(),
+  angry_or_confused: z.boolean().optional(),
+  competitor_comparison: z.boolean().optional(),
   raw_payload: z.record(z.string(), z.unknown()).optional(),
+}).superRefine((value, context) => {
+  if (
+    value.budget_min !== null &&
+    value.budget_min !== undefined &&
+    value.budget_max !== null &&
+    value.budget_max !== undefined &&
+    value.budget_max < value.budget_min
+  ) {
+    context.addIssue({
+      code: "custom",
+      path: ["budget_max"],
+      message: "Maximum budget cannot be lower than minimum budget.",
+    });
+  }
 });
 
 export const alertUpdateSchema = z

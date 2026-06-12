@@ -35,7 +35,7 @@ export const LeadInboxView: React.FC = () => {
     updateLeadStatus,
     assignLead,
     scheduleSiteVisit,
-    addLead,
+    addExternalIntake,
     activeRole,
   } = useApp();
   const canCreateLead = activeRole !== "EXECUTIVE";
@@ -61,10 +61,7 @@ export const LeadInboxView: React.FC = () => {
   const [familyAttending, setFamilyAttending] = useState(true);
   const [buyerLocation, setBuyerLocation] = useState("");
   const [showAddLead, setShowAddLead] = useState(false);
-  const [newLeadName, setNewLeadName] = useState("");
-  const [newLeadPhone, setNewLeadPhone] = useState("");
-  const [newLeadEmail, setNewLeadEmail] = useState("");
-  const [newLeadProjectId, setNewLeadProjectId] = useState("");
+  const [intakeResult, setIntakeResult] = useState<string | null>(null);
 
   const formatPriceRange = (min: number, max: number) => {
     const minLakhs = min / 100000;
@@ -176,39 +173,48 @@ export const LeadInboxView: React.FC = () => {
 
   const handleCreateLead = async (event: React.FormEvent) => {
     event.preventDefault();
-    const projectId = newLeadProjectId || projects[0]?.id;
+    const form = event.currentTarget as HTMLFormElement;
+    const values = new FormData(form);
+    const projectId = String(values.get("project_id") ?? "");
     if (!projectId) {
       return;
     }
-    const leadId = await addLead({
-      name: newLeadName,
-      phone: newLeadPhone,
-      email: newLeadEmail,
-      source: LeadSource.MANUAL,
+    const optionalNumber = (name: string) => {
+      const value = String(values.get(name) ?? "").trim();
+      return value ? Number(value) : undefined;
+    };
+    const receivedAt = String(values.get("received_at") ?? "").trim();
+    const result = await addExternalIntake({
+      buyer_name: String(values.get("buyer_name") ?? ""),
+      phone: String(values.get("phone") ?? ""),
+      email: String(values.get("email") ?? ""),
       project_id: projectId,
-      status: LeadStatus.NEW,
-      buyer_type: BuyerType.UNKNOWN,
-      apartment_preference: "",
-      budget_min: 0,
-      budget_max: 0,
-      purchase_timeline: PurchaseTimeline.UNKNOWN,
-      site_visit_interest: false,
-      engagement_quality: "UNKNOWN",
-      callback_responsiveness: "UNKNOWN",
-      handoff_signals: {},
-      assigned_to: undefined,
-      ai_summary: "",
-      recommended_next_action: "",
-      key_questions: [],
-      objections: [],
-      isAfterHours: false,
+      budget_text: String(values.get("budget_text") ?? ""),
+      budget_min: optionalNumber("budget_min"),
+      budget_max: optionalNumber("budget_max"),
+      purchase_timeline: values.get("purchase_timeline") as PurchaseTimeline,
+      preferred_location: String(values.get("preferred_location") ?? ""),
+      message: String(values.get("message") ?? ""),
+      source: values.get("source") as LeadSource,
+      campaign: String(values.get("campaign") ?? ""),
+      received_at: receivedAt ? new Date(receivedAt).toISOString() : undefined,
+      channel: String(values.get("channel") ?? "MANUAL_UI"),
+      site_visit_request: values.get("site_visit_request") === "on",
+      negotiation_intent: values.get("negotiation_intent") === "on",
+      booking_intent: values.get("booking_intent") === "on",
+      compliance_question: values.get("compliance_question") === "on",
+      human_requested: values.get("human_requested") === "on",
+      angry_or_confused: values.get("angry_or_confused") === "on",
+      competitor_comparison: values.get("competitor_comparison") === "on",
     });
-    setNewLeadName("");
-    setNewLeadPhone("");
-    setNewLeadEmail("");
-    setNewLeadProjectId("");
+    setIntakeResult(
+      result.outcome === "DUPLICATE"
+        ? `Duplicate detected. Opened existing lead. Matches: ${result.duplicateReasons?.join(", ") ?? "existing contact"}.`
+        : `Stage 3 intake created. AI status: ${result.aiStatus ?? result.lead.ai_qualification_status}.`,
+    );
+    form.reset();
     setShowAddLead(false);
-    setSelectedLeadId(leadId);
+    setSelectedLeadId(result.lead.id);
     setActivePage("detail");
   };
 
@@ -280,57 +286,140 @@ export const LeadInboxView: React.FC = () => {
       {showAddLead && (
         <form
           onSubmit={handleCreateLead}
-          className="grid grid-cols-1 gap-3 rounded-xl border border-zinc-800 bg-[#121214] p-4 text-xs md:grid-cols-5"
+          className="space-y-4 rounded-xl border border-indigo-500/25 bg-[#121214] p-5 text-xs"
         >
-          <label className="text-zinc-400">
-            Buyer name
-            <input
-              value={newLeadName}
-              onChange={(event) => setNewLeadName(event.target.value)}
-              className="mt-1 w-full rounded-lg border border-zinc-800 bg-zinc-900 p-2 text-zinc-100"
-              required
-            />
-          </label>
-          <label className="text-zinc-400">
-            Phone
-            <input
-              value={newLeadPhone}
-              onChange={(event) => setNewLeadPhone(event.target.value)}
-              className="mt-1 w-full rounded-lg border border-zinc-800 bg-zinc-900 p-2 text-zinc-100"
-              required
-            />
-          </label>
-          <label className="text-zinc-400">
-            Email
-            <input
-              type="email"
-              value={newLeadEmail}
-              onChange={(event) => setNewLeadEmail(event.target.value)}
-              className="mt-1 w-full rounded-lg border border-zinc-800 bg-zinc-900 p-2 text-zinc-100"
-            />
-          </label>
-          <label className="text-zinc-400">
-            Project
-            <select
-              value={newLeadProjectId}
-              onChange={(event) => setNewLeadProjectId(event.target.value)}
-              className="mt-1 w-full rounded-lg border border-zinc-800 bg-zinc-900 p-2 text-zinc-100"
-              required
-            >
-              <option value="">Select project</option>
-              {projects.map((project) => (
-                <option key={project.id} value={project.id}>
-                  {project.name}
-                </option>
+          <div>
+            <h3 className="font-bold text-indigo-300">
+              Stage 3 Manual Intake
+            </h3>
+            <p className="mt-1 text-zinc-500">
+              This visible test flow uses the Stage 3 intake pipeline, including
+              duplicate checks, AI status, deterministic scoring, timeline,
+              metrics, and alerts.
+            </p>
+          </div>
+
+          <div className="grid grid-cols-1 gap-3 md:grid-cols-4">
+            <label className="text-zinc-400">
+              Buyer name
+              <input name="buyer_name" className="mt-1 w-full rounded-lg border border-zinc-800 bg-zinc-900 p-2 text-zinc-100" required />
+            </label>
+            <label className="text-zinc-400">
+              Phone
+              <input name="phone" className="mt-1 w-full rounded-lg border border-zinc-800 bg-zinc-900 p-2 text-zinc-100" required />
+            </label>
+            <label className="text-zinc-400">
+              Email
+              <input name="email" type="email" className="mt-1 w-full rounded-lg border border-zinc-800 bg-zinc-900 p-2 text-zinc-100" />
+            </label>
+            <label className="text-zinc-400">
+              Project
+              <select name="project_id" className="mt-1 w-full rounded-lg border border-zinc-800 bg-zinc-900 p-2 text-zinc-100" required>
+                <option value="">Select project</option>
+                {projects.map((project) => (
+                  <option key={project.id} value={project.id}>{project.name}</option>
+                ))}
+              </select>
+            </label>
+          </div>
+
+          <div className="grid grid-cols-1 gap-3 md:grid-cols-4">
+            <label className="text-zinc-400">
+              Budget minimum (INR)
+              <input name="budget_min" type="number" min="0" className="mt-1 w-full rounded-lg border border-zinc-800 bg-zinc-900 p-2 text-zinc-100" />
+            </label>
+            <label className="text-zinc-400">
+              Budget maximum (INR)
+              <input name="budget_max" type="number" min="0" className="mt-1 w-full rounded-lg border border-zinc-800 bg-zinc-900 p-2 text-zinc-100" />
+            </label>
+            <label className="text-zinc-400">
+              Budget description
+              <input name="budget_text" placeholder="Example: 1.2 to 1.5 crore" className="mt-1 w-full rounded-lg border border-zinc-800 bg-zinc-900 p-2 text-zinc-100" />
+            </label>
+            <label className="text-zinc-400">
+              Purchase timeline
+              <select name="purchase_timeline" defaultValue={PurchaseTimeline.UNKNOWN} className="mt-1 w-full rounded-lg border border-zinc-800 bg-zinc-900 p-2 text-zinc-100">
+                {Object.values(PurchaseTimeline).map((timeline) => (
+                  <option key={timeline} value={timeline}>{timeline.replace(/_/g, " ")}</option>
+                ))}
+              </select>
+            </label>
+          </div>
+
+          <div className="grid grid-cols-1 gap-3 md:grid-cols-4">
+            <label className="text-zinc-400">
+              Source
+              <select name="source" defaultValue={LeadSource.MANUAL} className="mt-1 w-full rounded-lg border border-zinc-800 bg-zinc-900 p-2 text-zinc-100">
+                {Object.values(LeadSource).map((source) => (
+                  <option key={source} value={source}>{source}</option>
+                ))}
+              </select>
+            </label>
+            <label className="text-zinc-400">
+              Channel
+              <select name="channel" defaultValue="MANUAL_UI" className="mt-1 w-full rounded-lg border border-zinc-800 bg-zinc-900 p-2 text-zinc-100">
+                <option value="MANUAL_UI">MANUAL UI</option>
+                <option value="WEBSITE_FORM">WEBSITE FORM</option>
+                <option value="WEBHOOK">WEBHOOK SIMULATION</option>
+                <option value="EMAIL">EMAIL</option>
+                <option value="PHONE">PHONE</option>
+              </select>
+            </label>
+            <label className="text-zinc-400">
+              Campaign
+              <input name="campaign" placeholder="Campaign or form name" className="mt-1 w-full rounded-lg border border-zinc-800 bg-zinc-900 p-2 text-zinc-100" />
+            </label>
+            <label className="text-zinc-400">
+              Received time
+              <input name="received_at" type="datetime-local" className="mt-1 w-full rounded-lg border border-zinc-800 bg-zinc-900 p-2 text-zinc-100" />
+            </label>
+          </div>
+
+          <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
+            <label className="text-zinc-400">
+              Preferred location
+              <input name="preferred_location" placeholder="Example: Pune" className="mt-1 w-full rounded-lg border border-zinc-800 bg-zinc-900 p-2 text-zinc-100" />
+            </label>
+            <label className="text-zinc-400">
+              Enquiry message
+              <textarea name="message" rows={3} placeholder="Buyer enquiry, requirements, questions, or intent" className="mt-1 w-full rounded-lg border border-zinc-800 bg-zinc-900 p-2 text-zinc-100" />
+            </label>
+          </div>
+
+          <fieldset className="rounded-lg border border-zinc-800 p-3">
+            <legend className="px-2 font-bold text-zinc-300">
+              Validated manual qualification signals
+            </legend>
+            <div className="grid grid-cols-1 gap-2 text-zinc-400 md:grid-cols-4">
+              {[
+                ["site_visit_request", "Site visit request"],
+                ["negotiation_intent", "Negotiation intent"],
+                ["booking_intent", "Booking intent"],
+                ["compliance_question", "Legal or RERA question"],
+                ["human_requested", "Human requested"],
+                ["angry_or_confused", "Angry or confused"],
+                ["competitor_comparison", "Competitor comparison"],
+              ].map(([name, label]) => (
+                <label key={name} className="flex items-center gap-2">
+                  <input name={name} type="checkbox" />
+                  {label}
+                </label>
               ))}
-            </select>
-          </label>
-          <div className="flex items-end gap-2">
+            </div>
+          </fieldset>
+
+          <div className="flex items-center justify-between gap-3">
+            <p className="text-zinc-500">
+              If AI is unavailable, these validated inputs still feed the
+              deterministic Stage 2 workflow.
+            </p>
+            <div className="flex gap-2">
             <button
               type="submit"
+              aria-label="Create Lead"
               className="rounded-lg bg-indigo-600 px-3 py-2 font-bold text-white"
             >
-              Create Lead
+              Submit Stage 3 Intake
             </button>
             <button
               type="button"
@@ -339,8 +428,15 @@ export const LeadInboxView: React.FC = () => {
             >
               Cancel
             </button>
+            </div>
           </div>
         </form>
+      )}
+
+      {intakeResult && (
+        <div className="rounded-lg border border-emerald-500/25 bg-emerald-500/10 px-4 py-3 text-xs text-emerald-200">
+          {intakeResult}
+        </div>
       )}
 
       {/* Grid Filter Panel */}
