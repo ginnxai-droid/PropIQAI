@@ -37,6 +37,7 @@ export const LeadDetailView: React.FC = () => {
     handoffs,
     siteVisits,
     tasks,
+    intakeEvents,
     addConversationMessage,
     updateLeadStatus,
     updateLead,
@@ -90,6 +91,11 @@ export const LeadDetailView: React.FC = () => {
       ["PENDING", "CONTACTED", "ESCALATED"].includes(handoff.status),
   );
   const canCreateHandoff = activeRole !== "EXECUTIVE";
+  const leadIntakes = intakeEvents.filter(
+    (event) =>
+      event.lead_id === lead.id || event.duplicate_of_lead_id === lead.id,
+  );
+  const latestIntake = leadIntakes[0];
 
   const formatCurrency = (val: number) => {
     if (val >= 10000000) {
@@ -225,6 +231,67 @@ export const LeadDetailView: React.FC = () => {
               </span>
             </div>
           </div>
+        </div>
+
+        <div className="rounded-xl border border-indigo-500/20 bg-[#121214] p-5 text-xs">
+          <div className="flex items-center justify-between">
+            <h4 className="font-bold uppercase tracking-wider text-indigo-300">
+              External Intake And AI
+            </h4>
+            <span
+              className={`rounded border px-2 py-0.5 font-mono text-[9px] font-bold ${
+                lead.ai_qualification_status === "COMPLETED"
+                  ? "border-emerald-500/20 bg-emerald-500/10 text-emerald-300"
+                  : "border-zinc-700 bg-zinc-800 text-zinc-400"
+              }`}
+            >
+              {lead.ai_qualification_status.replace("_", " ")}
+            </span>
+          </div>
+          <div className="mt-3 grid grid-cols-2 gap-2 text-zinc-400">
+            <span>Channel</span>
+            <span className="text-right font-bold text-zinc-200">
+              {latestIntake?.channel ?? lead.intake_channel ?? "Not available"}
+            </span>
+            <span>Campaign</span>
+            <span className="text-right font-bold text-zinc-200">
+              {latestIntake?.campaign ?? lead.campaign ?? "Not available"}
+            </span>
+            <span>Received</span>
+            <span className="text-right font-mono text-[10px] text-zinc-300">
+              {lead.received_at
+                ? new Date(lead.received_at).toLocaleString()
+                : "Not available"}
+            </span>
+            <span>AI confidence</span>
+            <span className="text-right font-bold text-zinc-200">
+              {lead.ai_confidence === undefined || lead.ai_confidence === null
+                ? "Not available"
+                : `${Math.round(lead.ai_confidence * 100)}%`}
+            </span>
+          </div>
+          <div className="mt-3 flex flex-wrap gap-1.5">
+            {Object.entries(lead.ai_signals ?? {})
+              .filter(([, value]) => value === true)
+              .map(([name]) => (
+                <span
+                  key={name}
+                  className="rounded border border-indigo-500/20 bg-indigo-500/10 px-2 py-1 text-[9px] font-bold uppercase text-indigo-300"
+                >
+                  {name.replace(/_/g, " ")}
+                </span>
+              ))}
+            {Object.values(lead.ai_signals ?? {}).every((value) => value !== true) && (
+              <span className="text-zinc-500">
+                No validated boolean qualification signals.
+              </span>
+            )}
+          </div>
+          {lead.ai_summary && (
+            <p className="mt-3 rounded-lg border border-zinc-800 bg-zinc-900 p-3 text-zinc-400">
+              {lead.ai_summary}
+            </p>
+          )}
         </div>
 
         {/* Score and Priority Panel */}

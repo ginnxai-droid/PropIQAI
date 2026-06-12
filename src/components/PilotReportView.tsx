@@ -14,7 +14,14 @@ function formatDuration(seconds: number | null) {
 }
 
 export const PilotReportView: React.FC = () => {
-  const { leads, siteVisits, slaEvents, organizationName } = useApp();
+  const {
+    leads,
+    siteVisits,
+    slaEvents,
+    intakeEvents,
+    alerts,
+    organizationName,
+  } = useApp();
   const [generatedReport, setGeneratedReport] = useState<string | null>(null);
 
   const metrics = useMemo(() => {
@@ -54,6 +61,15 @@ export const PilotReportView: React.FC = () => {
 
     return {
       totalLeads: leads.length,
+      intakeCount: intakeEvents.length,
+      duplicateIntakeCount: intakeEvents.filter(
+        (event) => event.processing_status === "DUPLICATE",
+      ).length,
+      aiQualifiedIntakeCount: leads.filter(
+        (lead) =>
+          lead.received_at && lead.ai_qualification_status === "COMPLETED",
+      ).length,
+      activeAlerts: alerts.filter((alert) => alert.status !== "RESOLVED").length,
       afterHours: leads.filter((lead) => lead.isAfterHours).length,
       missedCallsResponded: leads.filter(
         (lead) => lead.source === "MISSED_CALL" && lead.first_response_at,
@@ -65,7 +81,7 @@ export const PilotReportView: React.FC = () => {
           ? Math.round((completedSlas / measurableSlas) * 100)
           : null,
     };
-  }, [leads, siteVisits, slaEvents]);
+  }, [alerts, intakeEvents, leads, siteVisits, slaEvents]);
 
   const handleGenerateSummary = () => {
     setGeneratedReport(`PROPIQ AI - CONTROLLED PILOT METRICS
@@ -73,6 +89,10 @@ Generated: ${new Date().toISOString()}
 Organization: ${organizationName}
 
 Persisted leads: ${metrics.totalLeads}
+External intake events: ${metrics.intakeCount}
+Duplicate intake events: ${metrics.duplicateIntakeCount}
+AI-qualified intake leads: ${metrics.aiQualifiedIntakeCount}
+Active internal alerts: ${metrics.activeAlerts}
 After-hours leads: ${metrics.afterHours}
 Missed-call leads with a recorded first response: ${metrics.missedCallsResponded}
 Confirmed site visits: ${metrics.confirmedSiteVisits}
@@ -86,7 +106,7 @@ Automated call recovery rate: Not available.
 WhatsApp response performance: Not available.
 
 Notes:
-- Values above are calculated only from persisted Stage 2 workflow records.
+- Values above are calculated only from persisted Stage 2 and Stage 3 workflow records.
 - Revenue and channel-delivery claims require verified external source events.
 - This report is not evidence of production readiness.`);
   };
@@ -116,6 +136,10 @@ Notes:
       <div className="grid grid-cols-1 md:grid-cols-3 gap-5">
         {[
           ["Persisted Leads", metrics.totalLeads],
+          ["External Intake Events", metrics.intakeCount],
+          ["Duplicate Intake Events", metrics.duplicateIntakeCount],
+          ["AI-Qualified Intake", metrics.aiQualifiedIntakeCount],
+          ["Active Internal Alerts", metrics.activeAlerts],
           ["Confirmed Site Visits", metrics.confirmedSiteVisits],
           ["Completed Site Visits", metrics.completedSiteVisits],
           ["Active Visit Records", metrics.activeVisitRecords],
@@ -136,7 +160,7 @@ Notes:
 
       <div className="rounded-xl border border-amber-500/20 bg-amber-500/10 p-4 text-xs text-amber-200">
         Revenue opportunity and external channel recovery metrics are Not
-        available in Stage 2.
+        available. Stage 3 internal alerts do not imply external delivery.
       </div>
 
       {generatedReport && (

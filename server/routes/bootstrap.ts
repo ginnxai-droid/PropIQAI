@@ -5,6 +5,7 @@ import type { AppConfig } from "../config";
 import { throwDatabaseError } from "../database";
 import { asyncHandler } from "../errors";
 import { refreshSlaState } from "../workflow/orchestrator";
+import { createAdminSupabaseClient } from "../supabase";
 
 export const bootstrapRouter = Router();
 
@@ -58,6 +59,7 @@ bootstrapRouter.get(
       tasksResult,
       slaEventsResult,
       membersResult,
+      alertsResult,
     ] = await Promise.all([
       auth.supabase
         .from("projects")
@@ -101,6 +103,11 @@ bootstrapRouter.get(
         )
         .eq("organization_id", organizationId)
         .eq("active", true),
+      auth.supabase
+        .from("internal_alerts")
+        .select("*")
+        .eq("organization_id", organizationId)
+        .order("created_at", { ascending: false }),
     ]);
 
     const results = [
@@ -112,9 +119,30 @@ bootstrapRouter.get(
       tasksResult,
       slaEventsResult,
       membersResult,
+      alertsResult,
     ];
     for (const result of results) {
       throwDatabaseError(result.error, "Application data could not be loaded.");
+    }
+
+    const accessibleLeadIds = (leadsResult.data ?? []).map((lead) => lead.id);
+    let intakeEvents: unknown[] = [];
+    if (accessibleLeadIds.length > 0) {
+      const admin = createAdminSupabaseClient(
+        request.app.locals.config as AppConfig,
+      );
+      const { data, error: intakeError } = await admin
+        .from("lead_intake_events")
+        .select(
+          "id, lead_id, duplicate_of_lead_id, provider, channel, event_type, source, campaign, received_at, processing_status, ai_status, error_message, created_at",
+        )
+        .eq("organization_id", organizationId)
+        .or(
+          `lead_id.in.(${accessibleLeadIds.join(",")}),duplicate_of_lead_id.in.(${accessibleLeadIds.join(",")})`,
+        )
+        .order("received_at", { ascending: false });
+      throwDatabaseError(intakeError, "Intake summaries could not be loaded.");
+      intakeEvents = data ?? [];
     }
 
     response.json({
@@ -132,6 +160,8 @@ bootstrapRouter.get(
         siteVisits: visitsResult.data ?? [],
         tasks: tasksResult.data ?? [],
         slaEvents: slaEventsResult.data ?? [],
+        alerts: alertsResult.data ?? [],
+        intakeEvents,
         members: membersResult.data ?? [],
       },
     });

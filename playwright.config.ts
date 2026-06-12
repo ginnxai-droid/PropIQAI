@@ -21,6 +21,10 @@ export default defineConfig({
       url: "http://127.0.0.1:3001/api/health",
       reuseExistingServer: true,
       timeout: 120_000,
+      env: {
+        ...process.env,
+        AI_QUALIFICATION_MODE: "local",
+      },
     },
     {
       command: "npm run dev:web -- --host 127.0.0.1",

@@ -27,6 +27,7 @@ import {
 export const LeadInboxView: React.FC = () => {
   const {
     leads,
+    intakeEvents,
     projects,
     users,
     setActivePage,
@@ -478,6 +479,11 @@ export const LeadInboxView: React.FC = () => {
                   const proj = projects.find((p) => p.id === lead.project_id);
                   const assignee = users.find((u) => u.id === lead.assigned_to);
                   const isSlaBreached = lead.sla_deadline && new Date(lead.sla_deadline).getTime() < Date.now();
+                  const duplicateIntake = intakeEvents.some(
+                    (event) =>
+                      event.duplicate_of_lead_id === lead.id &&
+                      event.processing_status === "DUPLICATE",
+                  );
                   
                   return (
                     <tr
@@ -500,6 +506,11 @@ export const LeadInboxView: React.FC = () => {
                               AfterHrs
                             </span>
                           )}
+                          {duplicateIntake && (
+                            <span className="shrink-0 rounded border border-amber-500/20 bg-amber-500/10 px-1 text-[8px] font-bold uppercase text-amber-300">
+                              Duplicate
+                            </span>
+                          )}
                         </div>
                         <div className="text-[10px] text-zinc-550 font-mono tracking-tight mt-0.5">{lead.phone} • {lead.email}</div>
                       </td>
@@ -508,6 +519,15 @@ export const LeadInboxView: React.FC = () => {
                       <td>
                         <span className={`px-2 py-0.5 rounded-full text-[9px] border font-semibold font-mono uppercase tracking-wider ${getSourceBadgeColor(lead.source)}`}>
                           {lead.source}
+                        </span>
+                        <span
+                          className={`mt-1 block text-[8px] font-bold uppercase ${
+                            lead.ai_qualification_status === "COMPLETED"
+                              ? "text-emerald-400"
+                              : "text-zinc-500"
+                          }`}
+                        >
+                          AI {lead.ai_qualification_status.replace("_", " ")}
                         </span>
                       </td>
 

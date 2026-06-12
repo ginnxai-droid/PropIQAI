@@ -16,6 +16,8 @@ import { projectsRouter } from "./routes/projects";
 import { siteVisitsRouter } from "./routes/siteVisits";
 import { slaRouter } from "./routes/sla";
 import { tasksRouter } from "./routes/tasks";
+import { alertsRouter } from "./routes/alerts";
+import { intakeRouter, publicIntakeRouter } from "./routes/intake";
 
 interface CreateAppOptions {
   config?: AppConfig;
@@ -59,6 +61,7 @@ export function createApp(options: CreateAppOptions = {}) {
     response.json({ status: "ok" });
   });
 
+  app.use("/api/intake", publicIntakeRouter);
   app.use("/api", options.authMiddleware ?? createAuthMiddleware(config));
   app.use("/api", bootstrapRouter);
   app.use("/api/dashboard", dashboardRouter);
@@ -68,6 +71,8 @@ export function createApp(options: CreateAppOptions = {}) {
   app.use("/api/site-visits", siteVisitsRouter);
   app.use("/api/sla", slaRouter);
   app.use("/api/tasks", tasksRouter);
+  app.use("/api/alerts", alertsRouter);
+  app.use("/api/intake", intakeRouter);
   app.use("/api/organization", organizationRouter);
 
   if (config.NODE_ENV === "production") {

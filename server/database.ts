@@ -35,7 +35,7 @@ export async function writeAuditLog(
   supabase: SupabaseClient,
   input: {
     organizationId: string;
-    actorProfileId: string;
+    actorProfileId: string | null;
     entityType: string;
     entityId?: string | null;
     action: string;

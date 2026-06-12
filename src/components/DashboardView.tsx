@@ -31,7 +31,16 @@ import {
 } from "recharts";
 
 export const DashboardView: React.FC = () => {
-  const { leads, siteVisits, slaEvents, projects, users, setActivePage, setSelectedLeadId } = useApp();
+  const {
+    leads,
+    siteVisits,
+    slaEvents,
+    intakeEvents,
+    projects,
+    users,
+    setActivePage,
+    setSelectedLeadId,
+  } = useApp();
 
   // Dynamic calculations from context
   const totalLeads = leads.length;
@@ -51,6 +60,17 @@ export const DashboardView: React.FC = () => {
     (event) =>
       event.breached ||
       (!event.completed_at && new Date(event.due_at).getTime() < Date.now()),
+  ).length;
+  const intakeCount = intakeEvents.length;
+  const hotIntakeCount = leads.filter(
+    (lead) => lead.received_at && lead.priority === Priority.HOT,
+  ).length;
+  const duplicateIntakeCount = intakeEvents.filter(
+    (event) => event.processing_status === "DUPLICATE",
+  ).length;
+  const aiQualifiedIntakeCount = leads.filter(
+    (lead) =>
+      lead.received_at && lead.ai_qualification_status === "COMPLETED",
   ).length;
 
   // 1. Chart Data: Lead Status distribution
@@ -281,6 +301,28 @@ export const DashboardView: React.FC = () => {
             </span>
           </div>
         </div>
+      </div>
+
+      <div className="grid grid-cols-2 gap-4 lg:grid-cols-4">
+        {[
+          ["External Intake", intakeCount, "Persisted events"],
+          ["HOT Intake", hotIntakeCount, "Deterministic score"],
+          ["Duplicate Intake", duplicateIntakeCount, "Linked, not overwritten"],
+          ["AI Qualified", aiQualifiedIntakeCount, "Validated JSON"],
+        ].map(([label, value, note]) => (
+          <div
+            key={label}
+            className="rounded-xl border border-indigo-500/15 bg-indigo-500/5 p-4"
+          >
+            <span className="text-[10px] font-bold uppercase tracking-wider text-indigo-300">
+              {label}
+            </span>
+            <span className="mt-2 block text-2xl font-black text-white">
+              {value}
+            </span>
+            <span className="mt-1 block text-[10px] text-zinc-500">{note}</span>
+          </div>
+        ))}
       </div>
 
       {/* Visual Recharts graphs */}

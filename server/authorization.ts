@@ -19,6 +19,8 @@ export type Permission =
   | "tasks:update"
   | "reports:read"
   | "sla:read"
+  | "alerts:read"
+  | "alerts:update"
   | "members:read"
   | "members:manage";
 
@@ -39,6 +41,8 @@ const permissions: Record<OrganizationRole, ReadonlySet<Permission>> = {
     "tasks:update",
     "reports:read",
     "sla:read",
+    "alerts:read",
+    "alerts:update",
     "members:read",
     "members:manage",
   ]),
@@ -58,6 +62,8 @@ const permissions: Record<OrganizationRole, ReadonlySet<Permission>> = {
     "tasks:update",
     "reports:read",
     "sla:read",
+    "alerts:read",
+    "alerts:update",
     "members:read",
     "members:manage",
   ]),
@@ -76,6 +82,8 @@ const permissions: Record<OrganizationRole, ReadonlySet<Permission>> = {
     "tasks:update",
     "reports:read",
     "sla:read",
+    "alerts:read",
+    "alerts:update",
     "members:read",
   ]),
   EXECUTIVE: new Set([
@@ -87,6 +95,7 @@ const permissions: Record<OrganizationRole, ReadonlySet<Permission>> = {
     "visits:create",
     "visits:update",
     "tasks:update",
+    "alerts:read",
   ]),
 };
 

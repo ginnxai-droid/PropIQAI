@@ -12,6 +12,8 @@ const config: AppConfig = {
   API_PORT: 3001,
   ALLOWED_ORIGINS: "http://localhost:3000",
   NODE_ENV: "test",
+  INTAKE_WEBHOOK_SECRET: "stage-three-test-webhook-secret",
+  AI_QUALIFICATION_MODE: "local",
 };
 
 const rejectAuth: RequestHandler = (_request, response) => {
@@ -33,6 +35,14 @@ describe("API security boundary", () => {
   it("rejects unauthenticated application requests", async () => {
     const response = await request(app).get("/api/bootstrap").expect(401);
     expect(response.body.error.code).toBe("UNAUTHENTICATED");
+  });
+
+  it("requires the configured secret before public webhook processing", async () => {
+    const response = await request(app)
+      .post("/api/intake/webhook/unknown")
+      .send({ buyer_name: "Webhook Buyer", phone: "+919876543210" })
+      .expect(401);
+    expect(response.body.error.code).toBe("INVALID_WEBHOOK_SECRET");
   });
 
   it("rejects origins outside the allowlist", async () => {

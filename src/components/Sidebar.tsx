@@ -20,6 +20,7 @@ export const Sidebar: React.FC = () => {
     setActivePage,
     leads,
     tasks,
+    alerts,
     selectedLeadId,
     activeRole,
   } = useApp();
@@ -56,6 +57,14 @@ export const Sidebar: React.FC = () => {
       badge: tasksPendingCount,
       badgeColor:
         "bg-amber-500/10 text-amber-400 border border-amber-500/10",
+    },
+    {
+      id: "alerts",
+      label: "Internal Alerts",
+      icon: AlertTriangle,
+      badge: alerts.filter((alert) => alert.status !== "RESOLVED").length,
+      badgeColor:
+        "bg-rose-500/10 text-rose-400 border border-rose-500/10 font-bold",
     },
     {
       id: "sla",

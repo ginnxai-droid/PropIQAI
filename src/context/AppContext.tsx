@@ -17,6 +17,8 @@ import {
   type Conversation,
   type FollowupTask,
   type Handoff,
+  type IntakeEvent,
+  type InternalAlert,
   type Lead,
   type Project,
   type SiteVisit,
@@ -37,6 +39,16 @@ type NewLeadInput = Omit<
   | "score_explanation"
   | "recalculated_at"
   | "sla_deadline"
+  | "ai_qualification_status"
+  | "ai_confidence"
+  | "ai_signals"
+  | "is_duplicate"
+  | "duplicate_of_lead_id"
+  | "intake_channel"
+  | "campaign"
+  | "preferred_location"
+  | "received_at"
+  | "business_hours_version"
 >;
 
 interface AppContextType {
@@ -48,6 +60,8 @@ interface AppContextType {
   siteVisits: SiteVisit[];
   tasks: FollowupTask[];
   slaEvents: SlaEvent[];
+  alerts: InternalAlert[];
+  intakeEvents: IntakeEvent[];
   activePage: string;
   selectedLeadId: string | null;
   activeRole: Role;
@@ -121,6 +135,10 @@ interface AppContextType {
     speaker: "buyer" | "ai" | "human",
     text: string,
   ) => Promise<void>;
+  updateAlertStatus: (
+    alertId: string,
+    status: "ACKNOWLEDGED" | "RESOLVED",
+  ) => Promise<void>;
 }
 
 interface RawMember {
@@ -159,6 +177,8 @@ interface BootstrapData {
   siteVisits: SiteVisit[];
   tasks: FollowupTask[];
   slaEvents: SlaEvent[];
+  alerts: InternalAlert[];
+  intakeEvents: IntakeEvent[];
   members: RawMember[];
 }
 
@@ -199,6 +219,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const [siteVisits, setSiteVisits] = useState<SiteVisit[]>([]);
   const [tasks, setTasks] = useState<FollowupTask[]>([]);
   const [slaEvents, setSlaEvents] = useState<SlaEvent[]>([]);
+  const [alerts, setAlerts] = useState<InternalAlert[]>([]);
+  const [intakeEvents, setIntakeEvents] = useState<IntakeEvent[]>([]);
   const [activePage, setActivePageState] = useState("dashboard");
   const [selectedLeadId, setSelectedLeadId] = useState<string | null>(null);
   const [activeRole, setActiveRole] = useState<Role>(Role.EXECUTIVE);
@@ -232,6 +254,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
       setSiteVisits(data.siteVisits);
       setTasks(data.tasks);
       setSlaEvents(data.slaEvents);
+      setAlerts(data.alerts);
+      setIntakeEvents(data.intakeEvents);
       setActiveRole(data.role);
       setOrganizationName(data.organization.name);
       setUsers(
@@ -508,6 +532,20 @@ export function AppProvider({ children }: { children: ReactNode }) {
     [refresh],
   );
 
+  const updateAlertStatus = useCallback(
+    async (
+      alertId: string,
+      status: "ACKNOWLEDGED" | "RESOLVED",
+    ) => {
+      await apiRequest(`/api/alerts/${alertId}`, {
+        method: "PATCH",
+        body: JSON.stringify({ status }),
+      });
+      await refresh();
+    },
+    [refresh],
+  );
+
   const value = useMemo<AppContextType>(
     () => ({
       projects,
@@ -518,6 +556,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
       siteVisits,
       tasks,
       slaEvents,
+      alerts,
+      intakeEvents,
       activePage,
       selectedLeadId,
       activeRole,
@@ -543,10 +583,12 @@ export function AppProvider({ children }: { children: ReactNode }) {
       createHandoff,
       addUser,
       addConversationMessage,
+      updateAlertStatus,
     }),
     [
       activePage,
       activeRole,
+      alerts,
       addConversationMessage,
       addLead,
       addProject,
@@ -557,6 +599,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
       createHandoff,
       error,
       handoffs,
+      intakeEvents,
       leads,
       loading,
       organizationName,
@@ -571,6 +614,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
       slaEvents,
       toggleTaskStatus,
       updateLead,
+      updateAlertStatus,
       updateLeadStatus,
       updateProject,
       updateSiteVisitOutcome,

@@ -7,6 +7,7 @@ import { throwDatabaseError } from "../database";
 import { asyncHandler } from "../errors";
 import { summarizeSiteVisits } from "../../src/lib/siteVisitMetrics";
 import { refreshSlaState } from "../workflow/orchestrator";
+import { createAdminSupabaseClient } from "../supabase";
 
 export const dashboardRouter = Router();
 
@@ -28,7 +29,7 @@ dashboardRouter.get(
         auth.supabase
           .from("leads")
           .select(
-            "id, source, status, priority, is_after_hours, created_at, first_response_at, sla_deadline",
+            "id, source, status, priority, is_after_hours, created_at, received_at, first_response_at, sla_deadline, ai_qualification_status",
           )
           .eq("organization_id", auth.organizationId),
         auth.supabase
@@ -76,6 +77,16 @@ dashboardRouter.get(
         return distribution;
       }, {}),
     ).map(([source, count]) => ({ source, count }));
+    const admin = createAdminSupabaseClient(
+      request.app.locals.config as AppConfig,
+    );
+    const { data: integrationEvents, error: integrationError } = await admin
+      .from("integration_events")
+      .select("processing_status")
+      .eq("organization_id", auth.organizationId)
+      .eq("event_type", "LEAD_RECEIVED");
+    throwDatabaseError(integrationError, "Intake metrics could not be loaded.");
+    const intakeRows = integrationEvents ?? [];
 
     response.json({
       data: {
@@ -83,6 +94,18 @@ dashboardRouter.get(
         newLeads: leadRows.filter((lead) => lead.status === "NEW").length,
         qualifiedLeads: leadRows.filter((lead) => lead.status === "QUALIFIED").length,
         hotLeads: leadRows.filter((lead) => lead.priority === "HOT").length,
+        intakeCount: intakeRows.length,
+        hotIntakeCount: leadRows.filter(
+          (lead) => lead.received_at && lead.priority === "HOT",
+        ).length,
+        duplicateIntakeCount: intakeRows.filter(
+          (event) => event.processing_status === "DUPLICATE",
+        ).length,
+        aiQualifiedIntakeCount: leadRows.filter(
+          (lead) =>
+            lead.received_at &&
+            lead.ai_qualification_status === "COMPLETED",
+        ).length,
         ...visitMetrics,
         slaBreaches: slaRows.filter(
           (event) =>

@@ -256,3 +256,39 @@ export const membershipCreateSchema = z.object({
   role: z.enum(roles),
   project_ids: z.array(uuid).max(100).default([]),
 });
+
+export const externalLeadIntakeSchema = z.object({
+  buyer_name: z.string().trim().min(2).max(200),
+  phone,
+  email: z.union([email, z.literal(""), z.null()]).optional(),
+  project_interest: z.string().trim().min(1).max(200).optional(),
+  project_id: uuid.optional(),
+  budget_text: z.string().trim().max(500).nullable().optional(),
+  budget_amount: z.coerce.number().int().nonnegative().nullable().optional(),
+  preferred_location: z.string().trim().max(240).nullable().optional(),
+  message: z.string().trim().max(10000).nullable().optional(),
+  source: z
+    .enum([
+      "PHONE",
+      "MISSED_CALL",
+      "WHATSAPP",
+      "WEBSITE",
+      "META",
+      "GOOGLE",
+      "EMAIL",
+      "PORTAL",
+      "MANUAL",
+    ])
+    .optional(),
+  campaign: z.string().trim().max(200).nullable().optional(),
+  received_at: z.iso.datetime().optional(),
+  channel: z.string().trim().min(2).max(80).optional(),
+  provider: z.string().trim().min(2).max(80).optional(),
+  raw_payload: z.record(z.string(), z.unknown()).optional(),
+});
+
+export const alertUpdateSchema = z
+  .object({
+    status: z.enum(["ACKNOWLEDGED", "RESOLVED"]),
+  })
+  .strict();

@@ -15,6 +15,7 @@ import {
   type HandoffSignals,
 } from "./scoring";
 import { calculateSlaDeadline, escalationLevel } from "./sla";
+import { upsertActiveAlert } from "./alerts";
 
 interface WorkflowLead {
   id: string;
@@ -36,7 +37,7 @@ interface WorkflowLead {
 export interface RunLeadWorkflowInput {
   organizationId: string;
   leadId: string;
-  actorProfileId: string;
+  actorProfileId: string | null;
   requestedReasons?: HandoffReason[];
 }
 
@@ -309,10 +310,25 @@ export async function refreshSlaState(
   const admin = createAdminSupabaseClient(config);
   const { data: events, error } = await admin
     .from("sla_events")
-    .select("id, lead_id, handoff_id, due_at, completed_at")
+    .select(
+      "id, lead_id, handoff_id, due_at, completed_at, breached, escalation_level",
+    )
     .eq("organization_id", organizationId)
     .is("completed_at", null);
   throwDatabaseError(error, "SLA state could not be refreshed.");
+
+  const { data: activeAlerts, error: alertError } = await admin
+    .from("internal_alerts")
+    .select("lead_id, alert_type")
+    .eq("organization_id", organizationId)
+    .in("status", ["OPEN", "ACKNOWLEDGED"]);
+  throwDatabaseError(alertError, "Active SLA alerts could not be loaded.");
+  const activeAlertKeys = new Set(
+    (activeAlerts ?? []).map(
+      (alert) => `${alert.lead_id}:${alert.alert_type}`,
+    ),
+  );
+  const operations: Promise<unknown>[] = [];
 
   for (const event of events ?? []) {
     const level = escalationLevel(
@@ -320,24 +336,80 @@ export async function refreshSlaState(
       now,
       event.completed_at ? new Date(event.completed_at) : null,
     );
-    const { error: eventError } = await admin
-      .from("sla_events")
-      .update({ breached: level > 0, escalation_level: level })
-      .eq("organization_id", organizationId)
-      .eq("id", event.id);
-    throwDatabaseError(eventError, "An SLA event could not be refreshed.");
+    if (event.breached !== (level > 0) || event.escalation_level !== level) {
+      operations.push(
+        (async () => {
+          const { error: eventError } = await admin
+            .from("sla_events")
+            .update({ breached: level > 0, escalation_level: level })
+            .eq("organization_id", organizationId)
+            .eq("id", event.id);
+          throwDatabaseError(eventError, "An SLA event could not be refreshed.");
+          if (event.lead_id) {
+            const { error: handoffError } = await admin
+              .from("handoffs")
+              .update({
+                escalation_level: level,
+                status: level > 0 ? "ESCALATED" : "PENDING",
+              })
+              .eq("organization_id", organizationId)
+              .eq("lead_id", event.lead_id)
+              .in("status", ["PENDING", "CONTACTED", "ESCALATED"])
+              .neq("status", "RESOLVED");
+            throwDatabaseError(
+              handoffError,
+              "A handoff escalation could not be refreshed.",
+            );
+          }
+        })(),
+      );
+    }
     if (event.lead_id) {
-      const { error: handoffError } = await admin
-        .from("handoffs")
-        .update({
-          escalation_level: level,
-          status: level > 0 ? "ESCALATED" : "PENDING",
-        })
-        .eq("organization_id", organizationId)
-        .eq("lead_id", event.lead_id)
-        .in("status", ["PENDING", "CONTACTED", "ESCALATED"])
-        .neq("status", "RESOLVED");
-      throwDatabaseError(handoffError, "A handoff escalation could not be refreshed.");
+      const millisecondsUntilDue = new Date(event.due_at).getTime() - now.getTime();
+      const queueAlert = (
+        alertType: "SLA_DUE_SOON" | "SLA_BREACHED" | "MANAGER_ESCALATION",
+        severity: "WARNING" | "HIGH" | "CRITICAL",
+        message: string,
+      ) => {
+        const key = `${event.lead_id}:${alertType}`;
+        if (activeAlertKeys.has(key)) return;
+        activeAlertKeys.add(key);
+        operations.push(
+          upsertActiveAlert(admin, {
+            organizationId,
+            leadId: event.lead_id,
+            alertType,
+            severity,
+            message,
+          }),
+        );
+      };
+      if (
+        level === 0 &&
+        millisecondsUntilDue >= 0 &&
+        millisecondsUntilDue <= 5 * 60_000
+      ) {
+        queueAlert(
+          "SLA_DUE_SOON",
+          "WARNING",
+          "The first-response SLA is due within five minutes.",
+        );
+      }
+      if (level > 0) {
+        queueAlert(
+          "SLA_BREACHED",
+          level >= 3 ? "CRITICAL" : "HIGH",
+          `The first-response SLA is breached at escalation level ${level}.`,
+        );
+      }
+      if (level >= 2) {
+        queueAlert(
+          "MANAGER_ESCALATION",
+          level >= 3 ? "CRITICAL" : "HIGH",
+          `Manager review is required for escalation level ${level}.`,
+        );
+      }
     }
   }
+  await Promise.all(operations);
 }

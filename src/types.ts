@@ -175,6 +175,16 @@ export interface Lead {
   created_at: string;
   updated_at: string;
   isAfterHours?: boolean;
+  intake_channel?: string;
+  campaign?: string;
+  preferred_location?: string;
+  received_at?: string;
+  business_hours_version?: string;
+  ai_qualification_status: "PENDING" | "COMPLETED" | "FAILED" | "NOT_AVAILABLE";
+  ai_confidence?: number;
+  ai_signals: Record<string, unknown>;
+  is_duplicate: boolean;
+  duplicate_of_lead_id?: string;
 }
 
 export interface Conversation {
@@ -249,8 +259,46 @@ export interface FollowupTask {
 
 export interface TimelineEvent {
   id: string;
-  type: "LEAD_CREATED" | "CONVERSATION" | "HANDOFF" | "SITE_VISIT" | "TASK" | "SLA" | "AUDIT";
+  type: "LEAD_CREATED" | "CONVERSATION" | "HANDOFF" | "SITE_VISIT" | "TASK" | "SLA" | "AUDIT" | "INTAKE" | "ALERT";
   occurred_at: string;
   title: string;
   data: Record<string, unknown>;
+}
+
+export interface IntakeEvent {
+  id: string;
+  lead_id?: string;
+  duplicate_of_lead_id?: string;
+  provider: string;
+  channel: string;
+  event_type: string;
+  source: LeadSource;
+  campaign?: string;
+  received_at: string;
+  processing_status: "RECEIVED" | "PROCESSED" | "DUPLICATE" | "FAILED";
+  ai_status: "PENDING" | "COMPLETED" | "FAILED" | "NOT_AVAILABLE";
+  error_message?: string;
+  created_at: string;
+}
+
+export interface InternalAlert {
+  id: string;
+  lead_id?: string;
+  alert_type:
+    | "HOT_LEAD"
+    | "PRIORITY_HOT_LEAD"
+    | "SLA_DUE_SOON"
+    | "SLA_BREACHED"
+    | "MANAGER_ESCALATION"
+    | "AFTER_HOURS_HIGH_INTENT"
+    | "DUPLICATE_LEAD_DETECTED"
+    | "ASSIGNMENT_REQUIRED";
+  severity: "INFO" | "WARNING" | "HIGH" | "CRITICAL";
+  status: "OPEN" | "ACKNOWLEDGED" | "RESOLVED";
+  assigned_role: Role;
+  message: string;
+  acknowledged_at?: string;
+  resolved_at?: string;
+  created_at: string;
+  updated_at: string;
 }

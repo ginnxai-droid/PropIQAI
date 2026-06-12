@@ -56,11 +56,11 @@ describe.skipIf(!shouldRun)("live reporting reconciliation", () => {
     const service = createClient(supabaseUrl, serviceRoleKey, {
       auth: { autoRefreshToken: false, persistSession: false },
     });
-    const [leadsResult, visitsResult, slaResult] = await Promise.all([
+    const [leadsResult, visitsResult, slaResult, integrationResult] = await Promise.all([
       service
         .from("leads")
         .select(
-          "source, status, priority, is_after_hours, created_at, first_response_at",
+          "source, status, priority, is_after_hours, created_at, received_at, first_response_at, ai_qualification_status",
         )
         .eq("organization_id", organizationId),
       service
@@ -71,15 +71,22 @@ describe.skipIf(!shouldRun)("live reporting reconciliation", () => {
         .from("sla_events")
         .select("due_at, completed_at, breached")
         .eq("organization_id", organizationId),
+      service
+        .from("integration_events")
+        .select("processing_status")
+        .eq("organization_id", organizationId)
+        .eq("event_type", "LEAD_RECEIVED"),
     ]);
     expect(leadsResult.error).toBeNull();
     expect(visitsResult.error).toBeNull();
     expect(slaResult.error).toBeNull();
+    expect(integrationResult.error).toBeNull();
 
     const leads = leadsResult.data ?? [];
     const visits = visitsResult.data ?? [];
     const visitMetrics = summarizeSiteVisits(visits);
     const slaEvents = slaResult.data ?? [];
+    const integrationEvents = integrationResult.data ?? [];
     const now = Date.now();
     const responseDurations = leads.flatMap((lead) =>
       lead.first_response_at
@@ -116,6 +123,18 @@ describe.skipIf(!shouldRun)("live reporting reconciliation", () => {
       newLeads: leads.filter((lead) => lead.status === "NEW").length,
       qualifiedLeads: leads.filter((lead) => lead.status === "QUALIFIED").length,
       hotLeads: leads.filter((lead) => lead.priority === "HOT").length,
+      intakeCount: integrationEvents.length,
+      hotIntakeCount: leads.filter(
+        (lead) => lead.received_at && lead.priority === "HOT",
+      ).length,
+      duplicateIntakeCount: integrationEvents.filter(
+        (event) => event.processing_status === "DUPLICATE",
+      ).length,
+      aiQualifiedIntakeCount: leads.filter(
+        (lead) =>
+          lead.received_at &&
+          lead.ai_qualification_status === "COMPLETED",
+      ).length,
       ...visitMetrics,
       slaBreaches: slaEvents.filter(
         (event) =>

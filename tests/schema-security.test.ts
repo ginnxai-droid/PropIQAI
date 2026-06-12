@@ -25,6 +25,14 @@ const membershipIntegrity = fs.readFileSync(
   ),
   "utf8",
 );
+const stage3 = fs.readFileSync(
+  path.join(
+    root,
+    "supabase/migrations/202606120001_stage_3_external_intake.sql",
+  ),
+  "utf8",
+);
+const securityDefinitions = `${rls}\n${stage3}`;
 const environmentExample = fs.readFileSync(
   path.join(root, ".env.example"),
   "utf8",
@@ -61,6 +69,10 @@ const tenantTables = [
   "followup_tasks",
   "sla_events",
   "audit_logs",
+  "lead_intake_events",
+  "lead_duplicate_events",
+  "integration_events",
+  "internal_alerts",
 ];
 
 function sourceFiles(directory: string): string[] {
@@ -72,7 +84,7 @@ function sourceFiles(directory: string): string[] {
 
 describe("database security definition", () => {
   it.each(tenantTables)("enables RLS on %s", (table) => {
-    expect(rls).toContain(
+    expect(securityDefinitions).toContain(
       `alter table public.${table} enable row level security;`,
     );
   });
@@ -121,6 +133,18 @@ describe("database security definition", () => {
     }
   });
 
+  it("keeps raw Stage 3 intake and integration payloads server-only", () => {
+    expect(stage3).toContain(
+      "revoke all on public.lead_intake_events from authenticated;",
+    );
+    expect(stage3).toContain(
+      "revoke all on public.integration_events from authenticated;",
+    );
+    expect(stage3).toContain(
+      "create policy internal_alerts_select_permitted",
+    );
+  });
+
   it("keeps local secret files ignored and example secrets empty", () => {
     expect(gitignore).toContain(".env*");
     expect(gitignore).toContain("!.env.example");
@@ -128,6 +152,7 @@ describe("database security definition", () => {
       /^SUPABASE_SERVICE_ROLE_KEY=\s*$/m,
     );
     expect(environmentExample).toMatch(/^SEED_DEFAULT_PASSWORD=\s*$/m);
+    expect(environmentExample).toMatch(/^INTAKE_WEBHOOK_SECRET=\s*$/m);
   });
 
   it("requires a seed password without printing it", () => {
@@ -147,11 +172,14 @@ describe("database security definition", () => {
 
   it("does not publish fabricated performance or integration claims", () => {
     expect(dashboardView).not.toContain("+15% vs wk");
-    expect(dashboardView).not.toContain("AI Qualified");
+    expect(dashboardView).toContain(
+      'lead.ai_qualification_status === "COMPLETED"',
+    );
+    expect(dashboardView).toContain("AI Qualified");
     expect(dashboardView).not.toContain("Voice Recoveries");
     expect(pilotReportView).toContain("Not available");
     expect(pilotReportView).toContain(
-      "calculated only from persisted Stage 2 workflow records",
+      "calculated only from persisted Stage 2 and Stage 3 workflow records",
     );
   });
 

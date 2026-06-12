@@ -45,6 +45,11 @@ const SlaAlertsView = lazy(() =>
     default: module.SlaAlertsView,
   })),
 );
+const AlertsView = lazy(() =>
+  import("./components/AlertsView").then((module) => ({
+    default: module.AlertsView,
+  })),
+);
 const PilotReportView = lazy(() =>
   import("./components/PilotReportView").then((module) => ({
     default: module.PilotReportView,
@@ -115,6 +120,8 @@ function AppContent() {
         return <SalesTasksView />;
       case "sla":
         return <SlaAlertsView />;
+      case "alerts":
+        return <AlertsView />;
       case "pilot":
         return <PilotReportView />;
       case "projects":

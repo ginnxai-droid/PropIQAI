@@ -270,6 +270,8 @@ leadsRouter.get(
       tasks,
       slaEvents,
       auditLogs,
+      intakeEvents,
+      alerts,
     ] = await Promise.all([
       admin
         .from("conversations")
@@ -301,6 +303,18 @@ leadsRouter.get(
         .select("*")
         .eq("organization_id", organizationId)
         .eq("entity_id", leadId),
+      admin
+        .from("lead_intake_events")
+        .select(
+          "id, lead_id, duplicate_of_lead_id, provider, channel, event_type, source, campaign, received_at, processing_status, ai_status, error_message, created_at",
+        )
+        .eq("organization_id", organizationId)
+        .or(`lead_id.eq.${leadId},duplicate_of_lead_id.eq.${leadId}`),
+      admin
+        .from("internal_alerts")
+        .select("*")
+        .eq("organization_id", organizationId)
+        .eq("lead_id", leadId),
     ]);
     for (const result of [
       conversations,
@@ -309,6 +323,8 @@ leadsRouter.get(
       tasks,
       slaEvents,
       auditLogs,
+      intakeEvents,
+      alerts,
     ]) {
       throwDatabaseError(result.error, "The lead timeline could not be loaded.");
     }
@@ -360,6 +376,23 @@ leadsRouter.get(
         type: "AUDIT",
         occurred_at: row.created_at,
         title: row.action,
+        data: row,
+      })),
+      ...(intakeEvents.data ?? []).map((row) => ({
+        id: row.id,
+        type: "INTAKE",
+        occurred_at: row.received_at,
+        title:
+          row.processing_status === "DUPLICATE"
+            ? `Duplicate intake received (${row.channel})`
+            : `External intake received (${row.channel})`,
+        data: row,
+      })),
+      ...(alerts.data ?? []).map((row) => ({
+        id: row.id,
+        type: "ALERT",
+        occurred_at: row.created_at,
+        title: `Alert: ${row.alert_type}`,
         data: row,
       })),
     ].sort(
