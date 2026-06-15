@@ -46,6 +46,7 @@ describe.skipIf(!shouldRun)("live task and site-visit mutations", () => {
   let betaVisitId = "";
   let createdTaskId = "";
   let createdVisitId = "";
+  let postVisitTaskId = "";
 
   beforeAll(async () => {
     if (!supabaseUrl || !anonKey || !serviceRoleKey || !password) {
@@ -167,6 +168,7 @@ describe.skipIf(!shouldRun)("live task and site-visit mutations", () => {
     }
     const entityIds = [
       createdTaskId,
+      postVisitTaskId,
       createdVisitId,
       betaTaskId,
       betaVisitId,
@@ -174,11 +176,11 @@ describe.skipIf(!shouldRun)("live task and site-visit mutations", () => {
     if (entityIds.length > 0) {
       await serviceRole.from("audit_logs").delete().in("entity_id", entityIds);
     }
-    if (createdTaskId || betaTaskId) {
+    if (createdTaskId || postVisitTaskId || betaTaskId) {
       await serviceRole
         .from("followup_tasks")
         .delete()
-        .in("id", [createdTaskId, betaTaskId].filter(Boolean));
+        .in("id", [createdTaskId, postVisitTaskId, betaTaskId].filter(Boolean));
     }
     if (createdVisitId || betaVisitId) {
       await serviceRole
@@ -349,6 +351,39 @@ describe.skipIf(!shouldRun)("live task and site-visit mutations", () => {
         outcome: `Buyer requested reschedule ${marker}`,
       });
 
+      const missed = await request(app)
+        .patch(`/api/site-visits/${createdVisitId}`)
+        .set("Authorization", `Bearer ${ownerToken}`)
+        .send({ status: "MISSED" });
+      expect(missed.status).toBe(200);
+      expect(missed.body.data.status).toBe("MISSED");
+
+      const completed = await request(app)
+        .patch(`/api/site-visits/${createdVisitId}`)
+        .set("Authorization", `Bearer ${ownerToken}`)
+        .send({ status: "COMPLETED" });
+      expect(completed.status).toBe(200);
+      expect(completed.body.data.status).toBe("COMPLETED");
+
+      const completedAgain = await request(app)
+        .patch(`/api/site-visits/${createdVisitId}`)
+        .set("Authorization", `Bearer ${ownerToken}`)
+        .send({ status: "COMPLETED" });
+      expect(completedAgain.status).toBe(200);
+      const postVisitTasks = await serviceRole
+        .from("followup_tasks")
+        .select("id, status, notes")
+        .eq("organization_id", alphaOrganizationId)
+        .eq("site_visit_id", createdVisitId)
+        .eq("task_type", "POST_VISIT_FEEDBACK");
+      expect(postVisitTasks.error).toBeNull();
+      expect(postVisitTasks.data).toHaveLength(1);
+      postVisitTaskId = postVisitTasks.data![0]!.id;
+      expect(postVisitTasks.data![0]).toMatchObject({
+        status: "PENDING",
+        notes: `Post-visit follow-up: Buyer requested reschedule ${marker}`,
+      });
+
       const freshOwner = userClient();
       const login = await freshOwner.auth.signInWithPassword({
         email: "owner@propiq.local",
@@ -362,7 +397,7 @@ describe.skipIf(!shouldRun)("live task and site-visit mutations", () => {
       expect(bootstrap.body.data.siteVisits).toContainEqual(
         expect.objectContaining({
           id: createdVisitId,
-          status: "RESCHEDULED",
+          status: "COMPLETED",
           preferred_date: "2030-02-12",
           outcome: `Buyer requested reschedule ${marker}`,
         }),

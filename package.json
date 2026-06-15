@@ -20,6 +20,7 @@
     "test:e2e": "playwright test",
     "test:e2e:stage3": "playwright test --config=playwright.stage3.config.ts && playwright test --config=playwright.stage3-unavailable.config.ts",
     "test:e2e:stage4": "playwright test --config=playwright.stage4.config.ts",
+    "test:e2e:deep": "playwright test --config=playwright.deep-e2e.config.ts",
     "seed": "tsx scripts/seed.ts",
     "pilot-data": "tsx scripts/pilot-data.ts generate",
     "pilot-data:reset": "tsx scripts/pilot-data.ts reset"

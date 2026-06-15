@@ -44,6 +44,7 @@ describe.skipIf(!shouldRun)("Stage 3 external intake and AI qualification", () =
   let organizationId = "";
   let organizationSlug = "";
   let projectId = "";
+  let alternateProjectId = "";
   let projectName = "";
   let primaryLeadId = "";
   let duplicateIntakeId = "";
@@ -78,6 +79,14 @@ describe.skipIf(!shouldRun)("Stage 3 external intake and AI qualification", () =
     expect(project.error).toBeNull();
     projectId = project.data!.id;
     projectName = project.data!.name;
+    const alternateProject = await admin
+      .from("projects")
+      .select("id")
+      .eq("organization_id", organizationId)
+      .eq("name", "PropIQ Residences")
+      .single();
+    expect(alternateProject.error).toBeNull();
+    alternateProjectId = alternateProject.data!.id;
   }, 45_000);
 
   afterAll(async () => {
@@ -265,6 +274,74 @@ describe.skipIf(!shouldRun)("Stage 3 external intake and AI qualification", () =
       .single();
     expect(duplicateEvent.error).toBeNull();
     expect(duplicateEvent.data?.existing_lead_id).toBe(primaryLeadId);
+  });
+
+  it("detects phone and email duplicates with and without the same project", async () => {
+    const primaryPhone = `+9195${marker.slice(-8)}`;
+    const primaryEmail = `stage-three-${marker}@example.test`;
+    const cases = [
+      {
+        label: "phone-only",
+        phone: primaryPhone,
+        email: `phone-only-${marker}@example.test`,
+        project_id: alternateProjectId,
+        expected: ["SAME_PHONE"],
+      },
+      {
+        label: "email-only",
+        phone: `+9171${marker.slice(-8)}`,
+        email: primaryEmail,
+        project_id: alternateProjectId,
+        expected: ["SAME_EMAIL"],
+      },
+      {
+        label: "email-project",
+        phone: `+9172${marker.slice(-8)}`,
+        email: primaryEmail,
+        project_id: projectId,
+        expected: ["SAME_EMAIL", "SAME_EMAIL_AND_PROJECT"],
+      },
+    ];
+
+    for (const duplicateCase of cases) {
+      const rawMarker = `raw-${duplicateCase.label}-${marker}`;
+      const response = await request(app)
+        .post("/api/intake/manual")
+        .set("Authorization", `Bearer ${ownerToken}`)
+        .send({
+          buyer_name: `Duplicate ${duplicateCase.label}`,
+          phone: duplicateCase.phone,
+          email: duplicateCase.email,
+          project_id: duplicateCase.project_id,
+          message: `Duplicate ${duplicateCase.label} verification.`,
+          campaign,
+          raw_payload: { marker: rawMarker },
+        });
+      expect(response.status).toBe(200);
+      expect(response.body.data.outcome).toBe("DUPLICATE");
+      expect(response.body.data.lead.id).toBe(primaryLeadId);
+      expect(response.body.data.duplicateReasons).toEqual(
+        expect.arrayContaining(duplicateCase.expected),
+      );
+      if (duplicateCase.expected.length === 1) {
+        expect(response.body.data.duplicateReasons).toEqual(
+          duplicateCase.expected,
+        );
+      }
+      intakeEventIds.push(response.body.data.intakeEventId);
+
+      const evidence = await admin
+        .from("lead_intake_events")
+        .select("raw_payload, processing_status, duplicate_of_lead_id")
+        .eq("id", response.body.data.intakeEventId)
+        .single();
+      expect(evidence.error).toBeNull();
+      expect(evidence.data).toMatchObject({
+        processing_status: "DUPLICATE",
+        duplicate_of_lead_id: primaryLeadId,
+        raw_payload: { raw_payload: { marker: rawMarker } },
+      });
+    }
   });
 
   it("uses validated manual signals when AI is unavailable", async () => {
