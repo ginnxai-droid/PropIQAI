@@ -37,6 +37,7 @@ npm run pilot-data:reset
 Each generation resets records whose campaign starts with
 `stage4-pilot-`, making reruns repeatable without deleting unrelated data.
 Scenarios include website, webhook, manual, duplicate, after-hours, HOT and
-WARM intake behavior, AI signals, and completed and missed visits. The base
-seed supplies multiple organizations, projects, users, all four priorities,
-SLA, alerts, and workflow records.
+WARM intake behavior, completed AI signals, an explicit AI-unavailable review,
+completed and missed visits, a breached SLA with an internal alert, and a
+failed retry-ready integration event. The base seed supplies multiple
+organizations, projects, users, and all four priorities.

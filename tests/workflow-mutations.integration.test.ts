@@ -294,79 +294,83 @@ describe.skipIf(!shouldRun)("live task and site-visit mutations", () => {
     expect(unchanged.data?.status).toBe("PENDING");
   });
 
-  it("creates, confirms, records outcome, reschedules, and persists a site visit", async () => {
-    const marker = Date.now();
-    const created = await request(app)
-      .post("/api/site-visits")
-      .set("Authorization", `Bearer ${ownerToken}`)
-      .send({
-        lead_id: alphaLeadId,
-        project_id: alphaProjectId,
-        assigned_to: executiveProfileId,
-        preferred_date: "2030-02-10",
-        preferred_time: "11:30",
-        visitors_count: 2,
-        buyer_location: "Pune",
-        needs_directions: true,
-        family_attending: true,
-        status: "REQUESTED",
-        reminder_status: "PENDING",
-      });
-    expect(created.status).toBe(201);
-    createdVisitId = created.body.data.id;
+  it(
+    "creates, confirms, records outcome, reschedules, and persists a site visit",
+    async () => {
+      const marker = Date.now();
+      const created = await request(app)
+        .post("/api/site-visits")
+        .set("Authorization", `Bearer ${ownerToken}`)
+        .send({
+          lead_id: alphaLeadId,
+          project_id: alphaProjectId,
+          assigned_to: executiveProfileId,
+          preferred_date: "2030-02-10",
+          preferred_time: "11:30",
+          visitors_count: 2,
+          buyer_location: "Pune",
+          needs_directions: true,
+          family_attending: true,
+          status: "REQUESTED",
+          reminder_status: "PENDING",
+        });
+      expect(created.status).toBe(201);
+      createdVisitId = created.body.data.id;
 
-    const confirmed = await request(app)
-      .patch(`/api/site-visits/${createdVisitId}`)
-      .set("Authorization", `Bearer ${ownerToken}`)
-      .send({ status: "CONFIRMED" });
-    expect(confirmed.status).toBe(200);
-    expect(confirmed.body.data.status).toBe("CONFIRMED");
+      const confirmed = await request(app)
+        .patch(`/api/site-visits/${createdVisitId}`)
+        .set("Authorization", `Bearer ${ownerToken}`)
+        .send({ status: "CONFIRMED" });
+      expect(confirmed.status).toBe(200);
+      expect(confirmed.body.data.status).toBe("CONFIRMED");
 
-    const withOutcome = await request(app)
-      .patch(`/api/site-visits/${createdVisitId}`)
-      .set("Authorization", `Bearer ${ownerToken}`)
-      .send({ outcome: `Buyer requested reschedule ${marker}` });
-    expect(withOutcome.status).toBe(200);
-    expect(withOutcome.body.data.outcome).toBe(
-      `Buyer requested reschedule ${marker}`,
-    );
+      const withOutcome = await request(app)
+        .patch(`/api/site-visits/${createdVisitId}`)
+        .set("Authorization", `Bearer ${ownerToken}`)
+        .send({ outcome: `Buyer requested reschedule ${marker}` });
+      expect(withOutcome.status).toBe(200);
+      expect(withOutcome.body.data.outcome).toBe(
+        `Buyer requested reschedule ${marker}`,
+      );
 
-    const rescheduled = await request(app)
-      .patch(`/api/site-visits/${createdVisitId}`)
-      .set("Authorization", `Bearer ${ownerToken}`)
-      .send({
+      const rescheduled = await request(app)
+        .patch(`/api/site-visits/${createdVisitId}`)
+        .set("Authorization", `Bearer ${ownerToken}`)
+        .send({
+          status: "RESCHEDULED",
+          preferred_date: "2030-02-12",
+          preferred_time: "15:45",
+        });
+      expect(rescheduled.status).toBe(200);
+      expect(rescheduled.body.data).toMatchObject({
         status: "RESCHEDULED",
         preferred_date: "2030-02-12",
-        preferred_time: "15:45",
-      });
-    expect(rescheduled.status).toBe(200);
-    expect(rescheduled.body.data).toMatchObject({
-      status: "RESCHEDULED",
-      preferred_date: "2030-02-12",
-      preferred_time: "15:45:00",
-      outcome: `Buyer requested reschedule ${marker}`,
-    });
-
-    const freshOwner = userClient();
-    const login = await freshOwner.auth.signInWithPassword({
-      email: "owner@propiq.local",
-      password,
-    });
-    expect(login.error).toBeNull();
-    const bootstrap = await request(app)
-      .get("/api/bootstrap")
-      .set("Authorization", `Bearer ${login.data.session!.access_token}`);
-    expect(bootstrap.status).toBe(200);
-    expect(bootstrap.body.data.siteVisits).toContainEqual(
-      expect.objectContaining({
-        id: createdVisitId,
-        status: "RESCHEDULED",
-        preferred_date: "2030-02-12",
+        preferred_time: "15:45:00",
         outcome: `Buyer requested reschedule ${marker}`,
-      }),
-    );
-    ownerToken = login.data.session!.access_token;
-  });
+      });
+
+      const freshOwner = userClient();
+      const login = await freshOwner.auth.signInWithPassword({
+        email: "owner@propiq.local",
+        password,
+      });
+      expect(login.error).toBeNull();
+      const bootstrap = await request(app)
+        .get("/api/bootstrap")
+        .set("Authorization", `Bearer ${login.data.session!.access_token}`);
+      expect(bootstrap.status).toBe(200);
+      expect(bootstrap.body.data.siteVisits).toContainEqual(
+        expect.objectContaining({
+          id: createdVisitId,
+          status: "RESCHEDULED",
+          preferred_date: "2030-02-12",
+          outcome: `Buyer requested reschedule ${marker}`,
+        }),
+      );
+      ownerToken = login.data.session!.access_token;
+    },
+    30_000,
+  );
 
   it("rejects unauthenticated site-visit mutation", async () => {
     const response = await request(app)

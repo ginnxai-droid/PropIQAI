@@ -112,10 +112,13 @@ async function generatePilotData() {
   ];
 
   const results = [];
-  for (const scenario of scenarios) {
+  for (const [index, scenario] of scenarios.entries()) {
     results.push(
       await processExternalLeadIntake(
-        config,
+        {
+          ...config,
+          AI_QUALIFICATION_MODE: index === 2 ? "unavailable" : "local",
+        },
         { ...scenario, project_id: project.id },
         {
           organizationId: organization.id,
@@ -157,7 +160,7 @@ async function generatePilotData() {
     .filter((result) => result.outcome === "CREATED")
     .map((result) => result.lead.id);
   if (createdLeadIds[0]) {
-    await admin.from("site_visits").insert([
+    const { error: visitError } = await admin.from("site_visits").insert([
       {
         organization_id: organization.id,
         lead_id: createdLeadIds[0],
@@ -183,6 +186,44 @@ async function generatePilotData() {
         reminder_status: "SENT",
       },
     ]);
+    if (visitError) throw visitError;
+
+    const breachedAt = "2026-06-14T17:00:00.000Z";
+    const { error: slaError } = await admin
+      .from("sla_events")
+      .update({ due_at: breachedAt, breached: true, escalation_level: 2 })
+      .eq("organization_id", organization.id)
+      .eq("lead_id", createdLeadIds[0])
+      .is("completed_at", null);
+    if (slaError) throw slaError;
+    const { error: alertError } = await admin.from("internal_alerts").insert({
+      organization_id: organization.id,
+      lead_id: createdLeadIds[0],
+      alert_type: "SLA_BREACHED",
+      severity: "CRITICAL",
+      status: "OPEN",
+      assigned_role: "MANAGER",
+      message: "Synthetic pilot SLA breach requires manager review.",
+    });
+    if (alertError) throw alertError;
+  }
+  const failedScenario = results[1];
+  if (failedScenario?.outcome === "CREATED") {
+    const { error: integrationError } = await admin
+      .from("integration_events")
+      .insert({
+        organization_id: organization.id,
+        provider: "PILOT_WEBHOOK",
+        channel: "WEBHOOK",
+        event_type: "DELIVERY_RETRY",
+        received_at: "2026-06-15T11:05:00+05:30",
+        processing_status: "FAILED",
+        error_message: "Synthetic upstream timeout for pilot visibility.",
+        retry_count: 2,
+        raw_payload_reference: failedScenario.intakeEventId,
+        lead_id: failedScenario.lead.id,
+      });
+    if (integrationError) throw integrationError;
   }
   console.log(
     JSON.stringify({
@@ -190,6 +231,12 @@ async function generatePilotData() {
       fakeDataOnly: true,
       organizations: 2,
       createdLeads: createdLeadIds.length,
+      aiUnavailableLeads: results.filter(
+        (result) =>
+          result.outcome === "CREATED" &&
+          result.aiStatus === "NOT_AVAILABLE",
+      ).length,
+      integrationFailures: failedScenario?.outcome === "CREATED" ? 1 : 0,
       campaignPrefix,
     }),
   );
