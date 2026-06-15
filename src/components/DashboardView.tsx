@@ -29,6 +29,7 @@ import {
   Cell,
   CartesianGrid,
 } from "recharts";
+import { PilotDashboardSummary } from "./PilotDashboardSummary";
 
 export const DashboardView: React.FC = () => {
   const {
@@ -142,6 +143,7 @@ export const DashboardView: React.FC = () => {
 
   return (
     <div className="space-y-6">
+      <PilotDashboardSummary />
       {/* Target Audience Warning Bar */}
       <div className="flex bg-indigo-950/20 border-l-2 border-indigo-500 p-4 rounded-xl items-center justify-between border border-zinc-800">
         <div className="flex items-center space-x-3">
@@ -223,7 +225,10 @@ export const DashboardView: React.FC = () => {
         </div>
 
         {/* Metric 5 */}
-        <div className="bg-[#121214] p-5 rounded-xl border border-zinc-800/80 hover:border-zinc-750 transition-all duration-200">
+        <div
+          data-testid="metric-after-hours"
+          className="bg-[#121214] p-5 rounded-xl border border-zinc-800/80 hover:border-zinc-750 transition-all duration-200"
+        >
           <div className="flex items-center justify-between">
             <span className="text-xs font-semibold text-zinc-400 uppercase tracking-wider">After-Hours</span>
             <span className="p-1.5 bg-purple-500/10 text-purple-400 border border-purple-500/20 rounded-lg">
@@ -312,6 +317,9 @@ export const DashboardView: React.FC = () => {
         ].map(([label, value, note]) => (
           <div
             key={label}
+            data-testid={`stage3-metric-${String(label)
+              .toLowerCase()
+              .replace(/\s+/g, "-")}`}
             className="rounded-xl border border-indigo-500/15 bg-indigo-500/5 p-4"
           >
             <span className="text-[10px] font-bold uppercase tracking-wider text-indigo-300">
@@ -333,8 +341,13 @@ export const DashboardView: React.FC = () => {
             <h3 className="font-bold text-zinc-100 text-sm">Lead Conversion Status Funnel</h3>
             <span className="text-[10px] font-mono bg-zinc-800/60 border border-zinc-700/60 px-2 py-0.5 rounded-md text-zinc-400 font-medium">Real-Time Core Metrics</span>
           </div>
-          <div className="h-64">
-            <ResponsiveContainer width="100%" height="100%">
+          <div className="h-64 min-w-0">
+            <ResponsiveContainer
+              width="100%"
+              height="100%"
+              minWidth={0}
+              initialDimension={{ width: 1, height: 1 }}
+            >
               <BarChart data={statusData} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
                 <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#1f1f23" />
                 <XAxis dataKey="name" stroke="#52525b" fontSize={11} tickLine={false} />
@@ -359,8 +372,13 @@ export const DashboardView: React.FC = () => {
             <h3 className="font-bold text-zinc-100 text-sm">Lead Generation Channel Volume</h3>
             <span className="text-[10px] font-mono bg-zinc-800/60 border border-zinc-700/60 px-2 py-0.5 rounded-md text-zinc-400 font-medium">Capture Ratio</span>
           </div>
-          <div className="h-44 relative flex items-center justify-center">
-            <ResponsiveContainer width="100%" height="100%">
+          <div className="h-44 min-w-0 relative flex items-center justify-center">
+            <ResponsiveContainer
+              width="100%"
+              height="100%"
+              minWidth={0}
+              initialDimension={{ width: 1, height: 1 }}
+            >
               <PieChart>
                 <Pie
                   data={sourceBreakdown}
@@ -404,8 +422,13 @@ export const DashboardView: React.FC = () => {
             <h3 className="font-bold text-zinc-100 text-sm">Follow-up Speed & Breach SLA Trend</h3>
             <span className="text-xs text-rose-450 font-mono font-bold">Current Records</span>
           </div>
-          <div className="h-64">
-            <ResponsiveContainer width="100%" height="100%">
+          <div className="h-64 min-w-0">
+            <ResponsiveContainer
+              width="100%"
+              height="100%"
+              minWidth={0}
+              initialDimension={{ width: 1, height: 1 }}
+            >
               <AreaChart data={slaTrendData} margin={{ top: 10, right: 10, left: -25, bottom: 0 }}>
                 <defs>
                   <linearGradient id="colorBreached" x1="0" y1="0" x2="0" y2="1">

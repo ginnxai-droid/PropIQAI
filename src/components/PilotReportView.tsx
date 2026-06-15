@@ -21,6 +21,7 @@ export const PilotReportView: React.FC = () => {
     intakeEvents,
     alerts,
     organizationName,
+    pilotOverview,
   } = useApp();
   const [generatedReport, setGeneratedReport] = useState<string | null>(null);
 
@@ -157,6 +158,69 @@ Notes:
           </div>
         ))}
       </div>
+
+      {pilotOverview && (
+        <>
+          <div className="grid grid-cols-1 gap-5 md:grid-cols-3">
+            {[
+              ["SLA Breach Count", pilotOverview.metrics.slaBreaches],
+              [
+                "SLA Compliance",
+                pilotOverview.metrics.slaCompliancePercent === null
+                  ? "Not available"
+                  : `${pilotOverview.metrics.slaCompliancePercent}%`,
+              ],
+              ["Missed Site Visits", pilotOverview.metrics.missedSiteVisits],
+              ["Pending Handoffs", pilotOverview.metrics.pendingHandoffs],
+              ["AI Unavailable", pilotOverview.metrics.aiUnavailableCount],
+              [
+                "Integration Failures",
+                pilotOverview.metrics.integrationFailureCount,
+              ],
+              [
+                "Handoff Effectiveness",
+                pilotOverview.metrics.handoffEffectivenessPercent === null
+                  ? "Not available"
+                  : `${pilotOverview.metrics.handoffEffectivenessPercent}%`,
+              ],
+              ["Revenue Opportunity", "Not available"],
+            ].map(([label, value]) => (
+              <div key={label} className="rounded-xl border border-zinc-800 bg-[#121214] p-5">
+                <span className="text-[10px] uppercase text-zinc-500">{label}</span>
+                <span className="mt-2 block text-xl font-black text-zinc-100">{value}</span>
+              </div>
+            ))}
+          </div>
+          <div className="grid gap-5 md:grid-cols-2">
+            <div className="rounded-xl border border-zinc-800 bg-[#121214] p-5">
+              <h4 className="text-xs font-bold uppercase text-zinc-300">Lead Volume By Source</h4>
+              <div className="mt-3 space-y-2 text-xs">
+                {Object.entries(pilotOverview.metrics.sourceDistribution).map(
+                  ([source, count]) => (
+                    <div key={source} className="flex justify-between border-b border-zinc-800 py-2">
+                      <span className="text-zinc-500">{source}</span>
+                      <span className="font-bold text-zinc-200">{count}</span>
+                    </div>
+                  ),
+                )}
+              </div>
+            </div>
+            <div className="rounded-xl border border-zinc-800 bg-[#121214] p-5">
+              <h4 className="text-xs font-bold uppercase text-zinc-300">Priority Distribution</h4>
+              <div className="mt-3 space-y-2 text-xs">
+                {Object.entries(pilotOverview.metrics.priorityDistribution).map(
+                  ([priority, count]) => (
+                    <div key={priority} className="flex justify-between border-b border-zinc-800 py-2">
+                      <span className="text-zinc-500">{priority}</span>
+                      <span className="font-bold text-zinc-200">{count}</span>
+                    </div>
+                  ),
+                )}
+              </div>
+            </div>
+          </div>
+        </>
+      )}
 
       <div className="rounded-xl border border-amber-500/20 bg-amber-500/10 p-4 text-xs text-amber-200">
         Revenue opportunity and external channel recovery metrics are Not

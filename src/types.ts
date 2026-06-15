@@ -334,3 +334,80 @@ export interface InternalAlert {
   created_at: string;
   updated_at: string;
 }
+
+export interface PilotQueueItem {
+  id: string;
+  kind: string;
+  leadId: string;
+  leadName: string;
+  status: string;
+  assignedTo?: string;
+  assignedRole?: string;
+  severity: "INFO" | "WARNING" | "HIGH" | "CRITICAL";
+  createdAt: string;
+  dueAt?: string;
+  reason?: string;
+}
+
+export interface PilotMetrics {
+  totalLeads: number;
+  hotLeads: number;
+  qualifiedLeads: number;
+  duplicateLeads: number;
+  afterHoursLeads: number;
+    slaBreaches: number;
+    pendingHandoffs: number;
+    overdueHandoffs: number;
+    slaDueSoon: number;
+    completedSiteVisits: number;
+    missedSiteVisits: number;
+    pendingSiteVisits: number;
+    todayFollowups: number;
+    buyerIntentLeads: number;
+    nextBestActionCount: number;
+  unresolvedAlerts: number;
+  aiQualifiedCount: number;
+  aiUnavailableCount: number;
+  integrationFailureCount: number;
+  sourceDistribution: Record<string, number>;
+  priorityDistribution: Record<string, number>;
+  siteVisitFunnel: Record<string, number>;
+  executiveWorkload: Array<{
+    profileId: string;
+      role: Role;
+      assignedLeads: number;
+      hotLeads: number;
+      pendingTasks: number;
+      todayFollowups: number;
+      pendingSiteVisits: number;
+      slaCountdowns: number;
+      buyerIntentLeads: number;
+      nextBestActionCount: number;
+  }>;
+  slaCompliancePercent: number | null;
+  averageResponseDelaySeconds: number | null;
+  handoffEffectivenessPercent: number | null;
+  revenueOpportunity: null;
+}
+
+export interface PilotOverview {
+  role: Role;
+  profileId: string;
+  organization: { id: string; name: string };
+  metrics: PilotMetrics;
+  queues: Record<string, PilotQueueItem[]>;
+  integrations: Array<{
+    provider: string;
+    label: string;
+    availability: "AVAILABLE" | "NOT_AVAILABLE";
+  }>;
+  integrationFailures: Array<{
+    id: string;
+    provider: string;
+    eventType: string;
+    status: string;
+    error: string;
+    createdAt: string;
+  }>;
+  pilotHealth: "HEALTHY" | "ATTENTION";
+}

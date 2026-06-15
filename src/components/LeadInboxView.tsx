@@ -184,38 +184,42 @@ export const LeadInboxView: React.FC = () => {
       return value ? Number(value) : undefined;
     };
     const receivedAt = String(values.get("received_at") ?? "").trim();
-    const result = await addExternalIntake({
-      buyer_name: String(values.get("buyer_name") ?? ""),
-      phone: String(values.get("phone") ?? ""),
-      email: String(values.get("email") ?? ""),
-      project_id: projectId,
-      budget_text: String(values.get("budget_text") ?? ""),
-      budget_min: optionalNumber("budget_min"),
-      budget_max: optionalNumber("budget_max"),
-      purchase_timeline: values.get("purchase_timeline") as PurchaseTimeline,
-      preferred_location: String(values.get("preferred_location") ?? ""),
-      message: String(values.get("message") ?? ""),
-      source: values.get("source") as LeadSource,
-      campaign: String(values.get("campaign") ?? ""),
-      received_at: receivedAt ? new Date(receivedAt).toISOString() : undefined,
-      channel: String(values.get("channel") ?? "MANUAL_UI"),
-      site_visit_request: values.get("site_visit_request") === "on",
-      negotiation_intent: values.get("negotiation_intent") === "on",
-      booking_intent: values.get("booking_intent") === "on",
-      compliance_question: values.get("compliance_question") === "on",
-      human_requested: values.get("human_requested") === "on",
-      angry_or_confused: values.get("angry_or_confused") === "on",
-      competitor_comparison: values.get("competitor_comparison") === "on",
-    });
-    setIntakeResult(
-      result.outcome === "DUPLICATE"
-        ? `Duplicate detected. Opened existing lead. Matches: ${result.duplicateReasons?.join(", ") ?? "existing contact"}.`
-        : `Stage 3 intake created. AI status: ${result.aiStatus ?? result.lead.ai_qualification_status}.`,
-    );
-    form.reset();
-    setShowAddLead(false);
-    setSelectedLeadId(result.lead.id);
-    setActivePage("detail");
+    try {
+      const result = await addExternalIntake({
+        buyer_name: String(values.get("buyer_name") ?? ""),
+        phone: String(values.get("phone") ?? ""),
+        email: String(values.get("email") ?? ""),
+        project_id: projectId,
+        budget_text: String(values.get("budget_text") ?? ""),
+        budget_min: optionalNumber("budget_min"),
+        budget_max: optionalNumber("budget_max"),
+        purchase_timeline: values.get("purchase_timeline") as PurchaseTimeline,
+        preferred_location: String(values.get("preferred_location") ?? ""),
+        message: String(values.get("message") ?? ""),
+        source: values.get("source") as LeadSource,
+        campaign: String(values.get("campaign") ?? ""),
+        received_at: receivedAt ? new Date(receivedAt).toISOString() : undefined,
+        channel: String(values.get("channel") ?? "MANUAL_UI"),
+        site_visit_request: values.get("site_visit_request") === "on",
+        negotiation_intent: values.get("negotiation_intent") === "on",
+        booking_intent: values.get("booking_intent") === "on",
+        compliance_question: values.get("compliance_question") === "on",
+        human_requested: values.get("human_requested") === "on",
+        angry_or_confused: values.get("angry_or_confused") === "on",
+        competitor_comparison: values.get("competitor_comparison") === "on",
+      });
+      setIntakeResult(
+        result.outcome === "DUPLICATE"
+          ? `Duplicate detected. Opened existing lead. Matches: ${result.duplicateReasons?.join(", ") ?? "existing contact"}.`
+          : `Stage 3 intake created. AI status: ${result.aiStatus ?? result.lead.ai_qualification_status}.`,
+      );
+      form.reset();
+      setShowAddLead(false);
+      setSelectedLeadId(result.lead.id);
+      setActivePage("detail");
+    } catch {
+      // apiRequest publishes the user-facing operation error through AppContext.
+    }
   };
 
   return (
@@ -299,7 +303,7 @@ export const LeadInboxView: React.FC = () => {
             </p>
           </div>
 
-          <div className="grid grid-cols-1 gap-3 md:grid-cols-4">
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4">
             <label className="text-zinc-400">
               Buyer name
               <input name="buyer_name" className="mt-1 w-full rounded-lg border border-zinc-800 bg-zinc-900 p-2 text-zinc-100" required />
@@ -314,7 +318,7 @@ export const LeadInboxView: React.FC = () => {
             </label>
             <label className="text-zinc-400">
               Project
-              <select name="project_id" className="mt-1 w-full rounded-lg border border-zinc-800 bg-zinc-900 p-2 text-zinc-100" required>
+              <select name="project_id" aria-label="Project" className="mt-1 w-full rounded-lg border border-zinc-800 bg-zinc-900 p-2 text-zinc-100" required>
                 <option value="">Select project</option>
                 {projects.map((project) => (
                   <option key={project.id} value={project.id}>{project.name}</option>
@@ -323,7 +327,7 @@ export const LeadInboxView: React.FC = () => {
             </label>
           </div>
 
-          <div className="grid grid-cols-1 gap-3 md:grid-cols-4">
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4">
             <label className="text-zinc-400">
               Budget minimum (INR)
               <input name="budget_min" type="number" min="0" className="mt-1 w-full rounded-lg border border-zinc-800 bg-zinc-900 p-2 text-zinc-100" />
@@ -338,7 +342,7 @@ export const LeadInboxView: React.FC = () => {
             </label>
             <label className="text-zinc-400">
               Purchase timeline
-              <select name="purchase_timeline" defaultValue={PurchaseTimeline.UNKNOWN} className="mt-1 w-full rounded-lg border border-zinc-800 bg-zinc-900 p-2 text-zinc-100">
+              <select name="purchase_timeline" aria-label="Purchase timeline" defaultValue={PurchaseTimeline.UNKNOWN} className="mt-1 w-full rounded-lg border border-zinc-800 bg-zinc-900 p-2 text-zinc-100">
                 {Object.values(PurchaseTimeline).map((timeline) => (
                   <option key={timeline} value={timeline}>{timeline.replace(/_/g, " ")}</option>
                 ))}
@@ -346,10 +350,10 @@ export const LeadInboxView: React.FC = () => {
             </label>
           </div>
 
-          <div className="grid grid-cols-1 gap-3 md:grid-cols-4">
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4">
             <label className="text-zinc-400">
               Source
-              <select name="source" defaultValue={LeadSource.MANUAL} className="mt-1 w-full rounded-lg border border-zinc-800 bg-zinc-900 p-2 text-zinc-100">
+              <select name="source" aria-label="Source" defaultValue={LeadSource.MANUAL} className="mt-1 w-full rounded-lg border border-zinc-800 bg-zinc-900 p-2 text-zinc-100">
                 {Object.values(LeadSource).map((source) => (
                   <option key={source} value={source}>{source}</option>
                 ))}
@@ -357,7 +361,7 @@ export const LeadInboxView: React.FC = () => {
             </label>
             <label className="text-zinc-400">
               Channel
-              <select name="channel" defaultValue="MANUAL_UI" className="mt-1 w-full rounded-lg border border-zinc-800 bg-zinc-900 p-2 text-zinc-100">
+              <select name="channel" aria-label="Channel" defaultValue="MANUAL_UI" className="mt-1 w-full rounded-lg border border-zinc-800 bg-zinc-900 p-2 text-zinc-100">
                 <option value="MANUAL_UI">MANUAL UI</option>
                 <option value="WEBSITE_FORM">WEBSITE FORM</option>
                 <option value="WEBHOOK">WEBHOOK SIMULATION</option>
@@ -390,7 +394,7 @@ export const LeadInboxView: React.FC = () => {
             <legend className="px-2 font-bold text-zinc-300">
               Validated manual qualification signals
             </legend>
-            <div className="grid grid-cols-1 gap-2 text-zinc-400 md:grid-cols-4">
+            <div className="grid grid-cols-1 gap-2 text-zinc-400 sm:grid-cols-2 lg:grid-cols-4">
               {[
                 ["site_visit_request", "Site visit request"],
                 ["negotiation_intent", "Negotiation intent"],

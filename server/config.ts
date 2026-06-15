@@ -45,3 +45,20 @@ export function loadConfig(environment: NodeJS.ProcessEnv = process.env): AppCon
     NODE_ENV: environment.NODE_ENV,
   });
 }
+
+export function validateRuntimeConfig(config: AppConfig) {
+  const origins = config.ALLOWED_ORIGINS.split(",")
+    .map((origin) => origin.trim())
+    .filter(Boolean);
+  if (origins.length === 0) {
+    throw new Error("At least one allowed origin is required.");
+  }
+  if (config.NODE_ENV === "production") {
+    if (!config.SUPABASE_SERVICE_ROLE_KEY) {
+      throw new Error("Production requires the Supabase service role key.");
+    }
+    if (origins.some((origin) => origin.includes("localhost"))) {
+      throw new Error("Production allowed origins cannot use localhost.");
+    }
+  }
+}

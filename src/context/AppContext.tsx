@@ -22,6 +22,7 @@ import {
   type IntakeEvent,
   type InternalAlert,
   type Lead,
+  type PilotOverview,
   type Project,
   type SiteVisit,
   type SlaEvent,
@@ -64,6 +65,7 @@ interface AppContextType {
   slaEvents: SlaEvent[];
   alerts: InternalAlert[];
   intakeEvents: IntakeEvent[];
+  pilotOverview: PilotOverview | null;
   activePage: string;
   selectedLeadId: string | null;
   activeRole: Role;
@@ -84,6 +86,11 @@ interface AppContextType {
     changes: Partial<
       Pick<
         Lead,
+        | "name"
+        | "phone"
+        | "email"
+        | "source"
+        | "status"
         | "buyer_type"
         | "apartment_preference"
         | "budget_min"
@@ -93,7 +100,17 @@ interface AppContextType {
         | "engagement_quality"
         | "callback_responsiveness"
         | "handoff_signals"
+        | "first_response_at"
+        | "last_contacted_at"
+        | "next_followup_at"
+        | "ai_summary"
         | "recommended_next_action"
+        | "key_questions"
+        | "objections"
+        | "intake_channel"
+        | "campaign"
+        | "preferred_location"
+        | "received_at"
       >
     >,
   ) => Promise<void>;
@@ -226,6 +243,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const [slaEvents, setSlaEvents] = useState<SlaEvent[]>([]);
   const [alerts, setAlerts] = useState<InternalAlert[]>([]);
   const [intakeEvents, setIntakeEvents] = useState<IntakeEvent[]>([]);
+  const [pilotOverview, setPilotOverview] = useState<PilotOverview | null>(null);
   const [activePage, setActivePageState] = useState("dashboard");
   const [selectedLeadId, setSelectedLeadId] = useState<string | null>(null);
   const [activeRole, setActiveRole] = useState<Role>(Role.EXECUTIVE);
@@ -261,6 +279,10 @@ export function AppProvider({ children }: { children: ReactNode }) {
       setSlaEvents(data.slaEvents);
       setAlerts(data.alerts);
       setIntakeEvents(data.intakeEvents);
+      const pilotResponse = await apiRequest<{ data: PilotOverview }>(
+        "/api/pilot/overview",
+      );
+      setPilotOverview(pilotResponse.data);
       setActiveRole(data.role);
       setOrganizationName(data.organization.name);
       setUsers(
@@ -342,6 +364,11 @@ export function AppProvider({ children }: { children: ReactNode }) {
       changes: Partial<
         Pick<
           Lead,
+          | "name"
+          | "phone"
+          | "email"
+          | "source"
+          | "status"
           | "buyer_type"
           | "apartment_preference"
           | "budget_min"
@@ -351,7 +378,17 @@ export function AppProvider({ children }: { children: ReactNode }) {
           | "engagement_quality"
           | "callback_responsiveness"
           | "handoff_signals"
+          | "first_response_at"
+          | "last_contacted_at"
+          | "next_followup_at"
+          | "ai_summary"
           | "recommended_next_action"
+          | "key_questions"
+          | "objections"
+          | "intake_channel"
+          | "campaign"
+          | "preferred_location"
+          | "received_at"
         >
       >,
     ) => {
@@ -578,6 +615,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
       slaEvents,
       alerts,
       intakeEvents,
+      pilotOverview,
       activePage,
       selectedLeadId,
       activeRole,
@@ -622,6 +660,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
       error,
       handoffs,
       intakeEvents,
+      pilotOverview,
       leads,
       loading,
       organizationName,

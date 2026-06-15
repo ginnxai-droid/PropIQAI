@@ -390,6 +390,31 @@ export async function processExternalLeadIntake(
       ]),
     ),
   };
+  const aiSignals: Record<string, unknown> = aiUpdate.ai_signals;
+  const validatedSignals = {
+    ...aiSignals,
+    site_visit_request:
+      Boolean(input.site_visit_request) ||
+      Boolean(aiSignals.site_visit_request),
+    negotiation_intent:
+      Boolean(input.negotiation_intent) ||
+      Boolean(aiSignals.negotiation_intent),
+    booking_intent:
+      Boolean(input.booking_intent) ||
+      Boolean(aiSignals.booking_intent),
+    legal_or_rera_question:
+      Boolean(input.compliance_question) ||
+      Boolean(aiSignals.legal_or_rera_question),
+    human_requested:
+      Boolean(input.human_requested) ||
+      Boolean(aiSignals.human_requested),
+    angry_or_confused:
+      Boolean(input.angry_or_confused) ||
+      Boolean(aiSignals.angry_or_confused),
+    competitor_comparison:
+      Boolean(input.competitor_comparison) ||
+      Boolean(aiSignals.competitor_comparison),
+  };
   const assignedTo = await eligibleAssignee(
     admin,
     context.organizationId,
@@ -443,7 +468,7 @@ export async function processExternalLeadIntake(
       business_hours_version: BUSINESS_HOURS_VERSION,
       ai_qualification_status: ai.status,
       ai_confidence: aiUpdate.ai_confidence,
-      ai_signals: aiUpdate.ai_signals,
+      ai_signals: validatedSignals,
       is_duplicate: false,
     })
     .select()

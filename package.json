@@ -18,12 +18,15 @@
     "test": "vitest run --config vitest.config.ts --configLoader runner",
     "test:watch": "vitest --config vitest.config.ts --configLoader runner",
     "test:e2e": "playwright test",
-    "seed": "tsx scripts/seed.ts"
+    "test:e2e:stage3": "playwright test --config=playwright.stage3.config.ts && playwright test --config=playwright.stage3-unavailable.config.ts",
+    "test:e2e:stage4": "playwright test --config=playwright.stage4.config.ts",
+    "seed": "tsx scripts/seed.ts",
+    "pilot-data": "tsx scripts/pilot-data.ts generate",
+    "pilot-data:reset": "tsx scripts/pilot-data.ts reset"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.108.0",
     "@tailwindcss/vite": "^4.1.14",
-    "@vitejs/plugin-react": "^5.0.4",
     "cors": "^2.8.6",
     "dotenv": "^17.2.3",
     "express": "^4.21.2",
@@ -35,7 +38,6 @@
     "react-dom": "^19.0.1",
     "react-router-dom": "^7.17.0",
     "recharts": "^3.8.1",
-    "vite": "^6.2.3",
     "zod": "^4.4.3"
   },
   "devDependencies": {
@@ -46,15 +48,16 @@
     "@types/react": "^19.2.17",
     "@types/react-dom": "^19.2.3",
     "@types/supertest": "^7.2.0",
+    "@vitejs/plugin-react": "^6.0.2",
     "autoprefixer": "^10.4.21",
     "concurrently": "^10.0.3",
-    "esbuild": "^0.25.0",
+    "esbuild": "^0.28.1",
     "supabase": "^2.105.0",
     "supertest": "^7.2.2",
     "tailwindcss": "^4.1.14",
-    "tsx": "^4.21.0",
+    "tsx": "^4.22.4",
     "typescript": "~5.8.2",
-    "vite": "^6.2.3",
+    "vite": "^8.0.16",
     "vitest": "^4.1.8"
   }
 }

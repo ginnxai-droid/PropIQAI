@@ -77,6 +77,40 @@ test("invalid credentials fail without exposing sensitive values", async ({ page
   await expect(page.locator("body")).not.toContainText(password);
 });
 
+test("an invalid stored access token returns the user to sign-in", async ({
+  page,
+}) => {
+  await signIn(page, "owner@propiq.local");
+  await page.evaluate(() => {
+    const authKey = Object.keys(localStorage).find(
+      (key) => key.startsWith("sb-") && key.endsWith("-auth-token"),
+    );
+    if (!authKey) {
+      throw new Error("Supabase auth storage was not found.");
+    }
+    const stored = JSON.parse(localStorage.getItem(authKey) ?? "{}") as {
+      access_token?: string;
+      expires_at?: number;
+    };
+    if (!stored.access_token) {
+      throw new Error("Supabase access token was not found.");
+    }
+    const tokenParts = stored.access_token.split(".");
+    if (tokenParts.length !== 3) {
+      throw new Error("Supabase access token is not a JWT.");
+    }
+    tokenParts[2] = "invalidsignature";
+    stored.access_token = tokenParts.join(".");
+    stored.expires_at = Math.floor(Date.now() / 1000) + 3600;
+    localStorage.setItem(authKey, JSON.stringify(stored));
+  });
+
+  await page.reload();
+  await expect(page).toHaveURL(/\/login$/);
+  await expect(page.getByText("Secure organization sign-in")).toBeVisible();
+  await expect(page.getByText("Workspace unavailable")).toHaveCount(0);
+});
+
 test("project and lead workflow persists across reload and a new session", async ({
   browser,
 }) => {
@@ -163,15 +197,20 @@ test("project and lead workflow persists across reload and a new session", async
 
 test("recovery token changes the password and the original credential is restored", async ({
   page,
+  baseURL,
 }) => {
   const admin = createClient(supabaseUrl, serviceRoleKey, {
     auth: { autoRefreshToken: false, persistSession: false },
   });
+  const recoveryRedirectUrl = new URL(
+    "/reset-password",
+    baseURL ?? process.env.APP_URL ?? "http://localhost:3000",
+  ).toString();
   const generated = await admin.auth.admin.generateLink({
     type: "recovery",
     email: "owner@propiq.local",
     options: {
-      redirectTo: `${process.env.APP_URL ?? "http://localhost:3000"}/reset-password`,
+      redirectTo: recoveryRedirectUrl,
     },
   });
   expect(generated.error).toBeNull();

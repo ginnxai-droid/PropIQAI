@@ -19,6 +19,13 @@ export class ClientApiError extends Error {
   }
 }
 
+async function clearInvalidSession() {
+  if (!supabase) {
+    return;
+  }
+  await supabase.auth.signOut({ scope: "local" }).catch(() => undefined);
+}
+
 export async function apiRequest<T>(
   path: string,
   options: RequestInit = {},
@@ -33,6 +40,7 @@ export async function apiRequest<T>(
 
   const { data, error } = await supabase.auth.getSession();
   if (error || !data.session) {
+    await clearInvalidSession();
     throw new ClientApiError(
       "Your session has expired. Sign in again.",
       401,
@@ -60,6 +68,9 @@ export async function apiRequest<T>(
       errorPayload.error?.code ?? "REQUEST_FAILED",
       errorPayload.error?.fields,
     );
+    if (response.status === 401) {
+      await clearInvalidSession();
+    }
     if (typeof window !== "undefined") {
       window.dispatchEvent(
         new CustomEvent("propiq:api-error", { detail: apiError.message }),

@@ -1,5 +1,6 @@
 import type { ErrorRequestHandler, RequestHandler } from "express";
 import { ZodError } from "zod";
+import { logError } from "./observability";
 
 export class ApiError extends Error {
   constructor(
@@ -24,6 +25,7 @@ export const notFoundHandler: RequestHandler = (_request, response) => {
     error: {
       code: "NOT_FOUND",
       message: "The requested API resource was not found.",
+      requestId: response.locals.requestId,
     },
   });
 };
@@ -40,6 +42,7 @@ export const errorHandler: ErrorRequestHandler = (
         code: "VALIDATION_ERROR",
         message: "The submitted data is invalid.",
         fields: error.flatten().fieldErrors,
+        requestId: response.locals.requestId,
       },
     });
     return;
@@ -50,16 +53,18 @@ export const errorHandler: ErrorRequestHandler = (
       error: {
         code: error.code,
         message: error.message,
+        requestId: response.locals.requestId,
       },
     });
     return;
   }
 
-  console.error("Unexpected API error", error);
+  logError(response.locals.requestId, error);
   response.status(500).json({
     error: {
       code: "INTERNAL_ERROR",
       message: "The request could not be completed.",
+      requestId: response.locals.requestId,
     },
   });
 };

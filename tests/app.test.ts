@@ -27,7 +27,11 @@ describe("API security boundary", () => {
 
   it("keeps the health check public and applies security headers", async () => {
     const response = await request(app).get("/api/health").expect(200);
-    expect(response.body).toEqual({ status: "ok" });
+    expect(response.body).toMatchObject({
+      status: "ok",
+      service: "propiq-api",
+    });
+    expect(response.body.timestamp).toEqual(expect.any(String));
     expect(response.headers["x-content-type-options"]).toBe("nosniff");
     expect(response.headers["x-powered-by"]).toBeUndefined();
   });

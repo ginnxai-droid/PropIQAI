@@ -125,6 +125,10 @@ const leadFields = z.object({
   recommended_next_action: z.string().max(5000).nullable().optional(),
   key_questions: z.array(z.string().max(1000)).max(100).default([]),
   objections: z.array(z.string().max(1000)).max(100).default([]),
+  intake_channel: z.string().trim().max(80).nullable().optional(),
+  campaign: z.string().trim().max(200).nullable().optional(),
+  preferred_location: z.string().trim().max(240).nullable().optional(),
+  received_at: z.iso.datetime().nullable().optional(),
   is_after_hours: z.boolean().default(false),
 });
 

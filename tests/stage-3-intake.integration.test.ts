@@ -299,6 +299,11 @@ describe.skipIf(!shouldRun)("Stage 3 external intake and AI qualification", () =
       preferred_location: "Pune",
       site_visit_interest: true,
       priority: "HOT",
+      ai_signals: {
+        site_visit_request: true,
+        negotiation_intent: true,
+        human_requested: true,
+      },
       handoff_signals: {
         price_negotiation: true,
         human_requested: true,

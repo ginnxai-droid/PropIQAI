@@ -29,6 +29,12 @@ export const Header: React.FC = () => {
         return { main: "Sales Operations Team", subtitle: "Organization memberships and access" };
       case "settings":
         return { main: "Secure Foundation Settings", subtitle: "Authentication and integration readiness" };
+      case "queues":
+        return { main: "Operational Queues", subtitle: "Prioritized persisted work by role and severity" };
+      case "health":
+        return { main: "Pilot Health Status", subtitle: "Safe API, database, and configuration checks" };
+      case "integrations":
+        return { main: "Integration Readiness", subtitle: "Provider availability and failure visibility" };
       default:
         return { main: "PropIQ AI", subtitle: "Revenue recovery platform" };
     }
@@ -48,14 +54,14 @@ export const Header: React.FC = () => {
         </p>
       </div>
 
-      <div className="flex items-center space-x-3">
-        <div className="flex items-center gap-2">
+      <div className="flex items-center space-x-2 md:space-x-3">
+        <div className="hidden items-center gap-2 sm:flex">
           <ShieldCheck className="w-4 h-4 text-zinc-500" />
           <span className="text-xs bg-zinc-900 border border-zinc-800 rounded-lg py-1 px-2.5 font-mono text-zinc-200">
             {activeRole}
           </span>
         </div>
-        <div className="h-6 w-px bg-zinc-800" />
+        <div className="hidden h-6 w-px bg-zinc-800 sm:block" />
         <div className="flex items-center space-x-2 bg-zinc-900 border border-zinc-800 md:py-1 md:pl-2 md:pr-3 rounded-full">
           <div className="w-7 h-7 rounded-full bg-zinc-800 text-zinc-100 flex items-center justify-center border border-zinc-700">
             <User className="w-3.5 h-3.5" />

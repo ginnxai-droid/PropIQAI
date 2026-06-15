@@ -18,6 +18,9 @@ import { slaRouter } from "./routes/sla";
 import { tasksRouter } from "./routes/tasks";
 import { alertsRouter } from "./routes/alerts";
 import { intakeRouter, publicIntakeRouter } from "./routes/intake";
+import { healthRouter } from "./routes/health";
+import { pilotRouter } from "./routes/pilot";
+import { requestContext } from "./observability";
 
 interface CreateAppOptions {
   config?: AppConfig;
@@ -33,6 +36,7 @@ export function createApp(options: CreateAppOptions = {}) {
   );
 
   app.disable("x-powered-by");
+  app.use(requestContext);
   app.use(helmet());
   app.use(
     cors({
@@ -57,9 +61,7 @@ export function createApp(options: CreateAppOptions = {}) {
     }),
   );
 
-  app.get("/api/health", (_request, response) => {
-    response.json({ status: "ok" });
-  });
+  app.use("/api/health", healthRouter);
 
   app.use("/api/intake", publicIntakeRouter);
   app.use("/api", options.authMiddleware ?? createAuthMiddleware(config));
@@ -74,6 +76,7 @@ export function createApp(options: CreateAppOptions = {}) {
   app.use("/api/alerts", alertsRouter);
   app.use("/api/intake", intakeRouter);
   app.use("/api/organization", organizationRouter);
+  app.use("/api/pilot", pilotRouter);
 
   if (config.NODE_ENV === "production") {
     const clientDirectory = path.resolve(process.cwd(), "dist");

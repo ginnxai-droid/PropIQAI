@@ -20,12 +20,54 @@ import {
 import {
   BuyerType,
   HandoffReason,
+  LeadSource,
   LeadStatus,
   Priority,
   PurchaseTimeline,
   type Lead,
   type TimelineEvent,
 } from "../types";
+
+const optionalIsoDateTime = (value: FormDataEntryValue | null) => {
+  const text = String(value ?? "").trim();
+  if (!text) {
+    return undefined;
+  }
+  const parsed = new Date(text);
+  return Number.isNaN(parsed.getTime()) ? undefined : parsed.toISOString();
+};
+
+const optionalString = (value: FormDataEntryValue | null) => {
+  const text = String(value ?? "").trim();
+  return text.length > 0 ? text : undefined;
+};
+
+const optionalNumber = (value: FormDataEntryValue | null) => {
+  const text = String(value ?? "").trim();
+  if (!text) {
+    return undefined;
+  }
+  const parsed = Number(text);
+  return Number.isFinite(parsed) ? parsed : undefined;
+};
+
+const linesToArray = (value: FormDataEntryValue | null) =>
+  String(value ?? "")
+    .split("\n")
+    .map((line) => line.trim())
+    .filter((line) => line.length > 0);
+
+const toDateTimeLocalValue = (value?: string) => {
+  if (!value) {
+    return "";
+  }
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) {
+    return "";
+  }
+  const localDate = new Date(date.getTime() - date.getTimezoneOffset() * 60000);
+  return localDate.toISOString().slice(0, 16);
+};
 
 export const LeadDetailView: React.FC = () => {
   const {
@@ -112,8 +154,12 @@ export const LeadDetailView: React.FC = () => {
 
   const runAction = async (message: string, action: () => Promise<void>) => {
     setActionMessage(null);
-    await action();
-    setActionMessage(message);
+    try {
+      await action();
+      setActionMessage(message);
+    } catch {
+      // apiRequest publishes the user-facing operation error through AppContext.
+    }
   };
 
   const handleSendMessage = async (e: React.FormEvent) => {
@@ -137,7 +183,12 @@ export const LeadDetailView: React.FC = () => {
   const handleQualificationUpdate = async (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     const values = new FormData(event.currentTarget);
-    await runAction("Qualification saved and deterministic score recalculated.", () => updateLead(lead.id, {
+    await runAction("Lead profile and qualification saved. Deterministic score recalculated.", () => updateLead(lead.id, {
+      name: String(values.get("name") ?? "").trim(),
+      phone: String(values.get("phone") ?? "").trim(),
+      email: optionalString(values.get("email")),
+      source: values.get("source") as Lead["source"],
+      status: values.get("status") as LeadStatus,
       buyer_type: values.get("buyer_type") as BuyerType,
       apartment_preference: String(values.get("apartment_preference") ?? ""),
       budget_min: Number(values.get("budget_min")),
@@ -157,9 +208,17 @@ export const LeadDetailView: React.FC = () => {
         serious_competitor_comparison:
           values.get("serious_competitor_comparison") === "on",
       },
-      recommended_next_action: String(
-        values.get("recommended_next_action") ?? "",
-      ),
+      first_response_at: optionalIsoDateTime(values.get("first_response_at")),
+      last_contacted_at: optionalIsoDateTime(values.get("last_contacted_at")),
+      next_followup_at: optionalIsoDateTime(values.get("next_followup_at")),
+      ai_summary: optionalString(values.get("ai_summary")),
+      recommended_next_action: optionalString(values.get("recommended_next_action")),
+      key_questions: linesToArray(values.get("key_questions")),
+      objections: linesToArray(values.get("objections")),
+      intake_channel: optionalString(values.get("intake_channel")),
+      campaign: optionalString(values.get("campaign")),
+      preferred_location: optionalString(values.get("preferred_location")),
+      received_at: optionalIsoDateTime(values.get("received_at")),
     }));
   };
 
@@ -255,7 +314,10 @@ export const LeadDetailView: React.FC = () => {
           </div>
         </div>
 
-        <div className="rounded-xl border border-indigo-500/20 bg-[#121214] p-5 text-xs">
+        <div
+          data-testid="external-intake-ai-panel"
+          className="rounded-xl border border-indigo-500/20 bg-[#121214] p-5 text-xs"
+        >
           <div className="flex items-center justify-between">
             <h4 className="font-bold uppercase tracking-wider text-indigo-300">
               External Intake And AI
@@ -271,32 +333,64 @@ export const LeadDetailView: React.FC = () => {
             </span>
           </div>
           <div className="mt-3 grid grid-cols-2 gap-2 text-zinc-400">
+            <span>Source</span>
+            <span
+              data-testid="stage3-field-source"
+              className="text-right font-bold text-zinc-200"
+            >
+              {latestIntake?.source ?? lead.source ?? "Not available"}
+            </span>
             <span>Channel</span>
-            <span className="text-right font-bold text-zinc-200">
+            <span
+              data-testid="stage3-field-channel"
+              className="text-right font-bold text-zinc-200"
+            >
               {latestIntake?.channel ?? lead.intake_channel ?? "Not available"}
             </span>
             <span>Campaign</span>
-            <span className="text-right font-bold text-zinc-200">
+            <span
+              data-testid="stage3-field-campaign"
+              className="text-right font-bold text-zinc-200"
+            >
               {latestIntake?.campaign ?? lead.campaign ?? "Not available"}
             </span>
             <span>Received</span>
-            <span className="text-right font-mono text-[10px] text-zinc-300">
+            <span
+              data-testid="stage3-field-received"
+              className="text-right font-mono text-[10px] text-zinc-300"
+            >
               {lead.received_at
                 ? new Date(lead.received_at).toLocaleString()
                 : "Not available"}
             </span>
             <span>Preferred location</span>
-            <span className="text-right font-bold text-zinc-200">
+            <span
+              data-testid="stage3-field-preferred-location"
+              className="text-right font-bold text-zinc-200"
+            >
               {lead.preferred_location ?? "Not available"}
             </span>
             <span>Duplicate state</span>
-            <span className="text-right font-bold text-zinc-200">
+            <span
+              data-testid="stage3-field-duplicate-state"
+              className="text-right font-bold text-zinc-200"
+            >
               {lead.is_duplicate || hasDuplicateIntake
                 ? "Duplicate intake detected"
                 : "No duplicate detected"}
             </span>
+            <span>After-hours state</span>
+            <span
+              data-testid="stage3-field-after-hours-state"
+              className="text-right font-bold text-zinc-200"
+            >
+              {lead.isAfterHours ? "After-hours intake" : "Business-hours intake"}
+            </span>
             <span>AI confidence</span>
-            <span className="text-right font-bold text-zinc-200">
+            <span
+              data-testid="stage3-field-ai-confidence"
+              className="text-right font-bold text-zinc-200"
+            >
               {lead.ai_confidence === undefined || lead.ai_confidence === null
                 ? "Not available"
                 : `${Math.round(lead.ai_confidence * 100)}%`}
@@ -364,20 +458,77 @@ export const LeadDetailView: React.FC = () => {
           className="space-y-3 rounded-xl border border-zinc-800 bg-[#121214] p-5 text-xs"
         >
           <h4 className="font-bold uppercase tracking-wider text-zinc-300">
-            Qualification Details
+            Lead Profile And Qualification
           </h4>
-          <label className="block text-zinc-400">
-            Buyer type
-            <select
-              name="buyer_type"
-              defaultValue={lead.buyer_type}
-              className="mt-1 w-full rounded-lg border border-zinc-800 bg-zinc-900 p-2 text-zinc-100"
-            >
-              {Object.values(BuyerType).map((type) => (
-                <option key={type} value={type}>{type}</option>
-              ))}
-            </select>
-          </label>
+          <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
+            <label className="text-zinc-400">
+              Buyer name
+              <input
+                name="name"
+                defaultValue={lead.name}
+                className="mt-1 w-full rounded-lg border border-zinc-800 bg-zinc-900 p-2 text-zinc-100"
+                required
+              />
+            </label>
+            <label className="text-zinc-400">
+              Phone
+              <input
+                name="phone"
+                defaultValue={lead.phone}
+                className="mt-1 w-full rounded-lg border border-zinc-800 bg-zinc-900 p-2 text-zinc-100"
+                required
+              />
+            </label>
+          </div>
+          <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
+            <label className="text-zinc-400">
+              Email
+              <input
+                name="email"
+                type="email"
+                defaultValue={lead.email}
+                className="mt-1 w-full rounded-lg border border-zinc-800 bg-zinc-900 p-2 text-zinc-100"
+              />
+            </label>
+            <label className="text-zinc-400">
+              Source
+              <select
+                name="source"
+                defaultValue={lead.source}
+                className="mt-1 w-full rounded-lg border border-zinc-800 bg-zinc-900 p-2 text-zinc-100"
+              >
+                {Object.values(LeadSource).map((source) => (
+                  <option key={source} value={source}>{source}</option>
+                ))}
+              </select>
+            </label>
+          </div>
+          <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
+            <label className="text-zinc-400">
+              Status
+              <select
+                name="status"
+                defaultValue={lead.status}
+                className="mt-1 w-full rounded-lg border border-zinc-800 bg-zinc-900 p-2 text-zinc-100"
+              >
+                {Object.values(LeadStatus).map((status) => (
+                  <option key={status} value={status}>{status.replace(/_/g, " ")}</option>
+                ))}
+              </select>
+            </label>
+            <label className="text-zinc-400">
+              Buyer type
+              <select
+                name="buyer_type"
+                defaultValue={lead.buyer_type}
+                className="mt-1 w-full rounded-lg border border-zinc-800 bg-zinc-900 p-2 text-zinc-100"
+              >
+                {Object.values(BuyerType).map((type) => (
+                  <option key={type} value={type}>{type}</option>
+                ))}
+              </select>
+            </label>
+          </div>
           <label className="block text-zinc-400">
             Apartment preference
             <input

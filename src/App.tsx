@@ -70,6 +70,21 @@ const SettingsView = lazy(() =>
     default: module.SettingsView,
   })),
 );
+const OperationalQueuesView = lazy(() =>
+  import("./components/OperationalQueuesView").then((module) => ({
+    default: module.OperationalQueuesView,
+  })),
+);
+const HealthStatusView = lazy(() =>
+  import("./components/HealthStatusView").then((module) => ({
+    default: module.HealthStatusView,
+  })),
+);
+const IntegrationStatusView = lazy(() =>
+  import("./components/IntegrationStatusView").then((module) => ({
+    default: module.IntegrationStatusView,
+  })),
+);
 
 function AppContent() {
   const {
@@ -130,6 +145,12 @@ function AppContent() {
         return <SalesTeamView />;
       case "settings":
         return <SettingsView />;
+      case "queues":
+        return <OperationalQueuesView />;
+      case "health":
+        return <HealthStatusView />;
+      case "integrations":
+        return <IntegrationStatusView />;
       default:
         return <DashboardView />;
     }
@@ -146,7 +167,7 @@ function AppContent() {
         <Header />
 
         {/* Dynamic page content wrapped in smooth scroll & fade animation */}
-        <main className="flex-1 overflow-y-auto p-6 md:p-8 bg-[#09090b]">
+        <main className="flex-1 overflow-y-auto p-4 sm:p-6 md:p-8 bg-[#09090b]">
           {operationError && (
             <div className="mb-4 flex items-center justify-between rounded-lg border border-rose-500/30 bg-rose-500/10 px-4 py-3 text-sm text-rose-200">
               <span>{operationError}</span>

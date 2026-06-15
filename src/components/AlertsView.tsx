@@ -1,4 +1,4 @@
-import React from "react";
+import React, { useState } from "react";
 import { AlertTriangle, CheckCircle2, Eye, Siren } from "lucide-react";
 import { useApp } from "../context/AppContext";
 
@@ -11,9 +11,35 @@ export const AlertsView: React.FC = () => {
     setActivePage,
   } = useApp();
   const activeAlerts = alerts.filter((alert) => alert.status !== "RESOLVED");
+  const [actionMessage, setActionMessage] = useState<string | null>(null);
+
+  const runAlertAction = async (
+    alertId: string,
+    status: "ACKNOWLEDGED" | "RESOLVED",
+  ) => {
+    setActionMessage(null);
+    try {
+      await updateAlertStatus(alertId, status);
+      setActionMessage(
+        status === "ACKNOWLEDGED"
+          ? "Alert acknowledged."
+          : "Alert resolved.",
+      );
+    } catch {
+      // apiRequest publishes the user-facing operation error through AppContext.
+    }
+  };
 
   return (
     <div className="mx-auto max-w-6xl space-y-6">
+      {actionMessage && (
+        <div
+          role="status"
+          className="rounded-lg border border-emerald-500/25 bg-emerald-500/10 px-4 py-3 text-xs text-emerald-200"
+        >
+          {actionMessage}
+        </div>
+      )}
       <div className="flex items-start gap-4 rounded-xl border border-rose-500/20 bg-rose-500/10 p-5">
         <div className="rounded-lg border border-rose-500/20 bg-rose-500/10 p-3 text-rose-400">
           <Siren className="h-6 w-6" />
@@ -86,16 +112,14 @@ export const AlertsView: React.FC = () => {
                     )}
                     {alert.status === "OPEN" && (
                       <button
-                        onClick={() =>
-                          void updateAlertStatus(alert.id, "ACKNOWLEDGED")
-                        }
+                        onClick={() => void runAlertAction(alert.id, "ACKNOWLEDGED")}
                         className="rounded-lg border border-amber-500/20 bg-amber-500/10 px-3 py-2 text-[10px] font-bold text-amber-300"
                       >
                         Acknowledge
                       </button>
                     )}
                     <button
-                      onClick={() => void updateAlertStatus(alert.id, "RESOLVED")}
+                      onClick={() => void runAlertAction(alert.id, "RESOLVED")}
                       className="rounded-lg bg-emerald-600 px-3 py-2 text-[10px] font-bold text-white"
                     >
                       Resolve

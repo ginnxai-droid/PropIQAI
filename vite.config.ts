@@ -15,8 +15,29 @@ export default defineConfig(() => ({
     watch: process.env.DISABLE_HMR === "true" ? null : {},
     proxy: {
       "/api": {
-        target: "http://127.0.0.1:3001",
+        target: process.env.API_PROXY_TARGET ?? "http://127.0.0.1:3001",
         changeOrigin: true,
+      },
+    },
+  },
+  build: {
+    rollupOptions: {
+      output: {
+        manualChunks(moduleId) {
+          if (moduleId.includes("node_modules/motion")) {
+            return "motion";
+          }
+          if (
+            moduleId.includes("node_modules/react/") ||
+            moduleId.includes("node_modules/react-dom/") ||
+            moduleId.includes("node_modules/react-router")
+          ) {
+            return "react";
+          }
+          if (moduleId.includes("node_modules/@supabase/")) {
+            return "supabase";
+          }
+        },
       },
     },
   },
