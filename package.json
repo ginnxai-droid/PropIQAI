@@ -23,7 +23,8 @@
     "test:e2e:deep": "playwright test --config=playwright.deep-e2e.config.ts",
     "seed": "tsx scripts/seed.ts",
     "pilot-data": "tsx scripts/pilot-data.ts generate",
-    "pilot-data:reset": "tsx scripts/pilot-data.ts reset"
+    "pilot-data:reset": "tsx scripts/pilot-data.ts reset",
+    "demo:smoke": "tsx scripts/demo-smoke.ts"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.108.0",
